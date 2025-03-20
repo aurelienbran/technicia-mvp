@@ -1,0 +1,46 @@
+# Configuration Qdrant pour TechnicIA
+
+storage:
+  # Dossier pour stocker les données persistantes
+  storage_path: ./storage
+
+  # Intervalle de temps entre deux points de sauvegarde
+  snapshots_interval: 60s
+  
+  # Délai avant de considérer qu'un segment est inactif
+  time_to_immediately_idle: 60s
+
+  # Configuration HNSW pour optimiser les performances
+  hnsw_config:
+    # Ce paramètre définit le nombre de connexions par nœud dans le graphe
+    m: 16
+    
+    # Nombre de nœuds à considérer durant la construction
+    ef_construct: 100
+    
+    # Taille du tableau utilisé pour échantillonner les voisins les plus proches
+    # Une valeur plus élevée donne une meilleure précision au prix de vitesse réduite
+    full_scan_threshold: 10000
+
+    # Nombre maximum de nœuds à explorer lors de la recherche
+    max_indexing_threads: 0
+    
+    # Paramètres pour les mises à jour
+    payload_m: 16
+    
+service:
+  # Port HTTP pour l'API REST
+  http_port: 6333
+  
+  # Port GRPC
+  grpc_port: 6334
+  
+  # Options pour la gestion des cors
+  cors:
+    # Allow or disable CORS requests
+    allow_all: true
+    
+  # Telemetry collection, disabled for privacy
+  telemetry_disabled: true
+
+log_level: INFO
