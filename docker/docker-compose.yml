@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # n8n pour l'orchestration
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: technicia-n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=your-vps-ip-or-domain
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - WEBHOOK_TUNNEL_URL=https://your-domain/webhook/
+      - N8N_LOG_LEVEL=info
+    volumes:
+      - ./n8n/data:/home/node/.n8n
+    networks:
+      - technicia-network
+
+  # Qdrant pour le stockage vectoriel
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: technicia-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ./qdrant/storage:/qdrant/storage
+    environment:
+      - QDRANT_ALLOW_CORS=true
+      - QDRANT_LOG_LEVEL=INFO
+      - QDRANT_TELEMETRY_DISABLED=true
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    networks:
+      - technicia-network
+
+  # Document Processor Service
+  document-processor:
+    build: 
+      context: ../services/document-processor
+      dockerfile: Dockerfile
+    container_name: technicia-document-processor
+    ports:
+      - "8001:8000"
+    environment:
+      - DOCUMENT_AI_PROJECT=${DOCUMENT_AI_PROJECT}
+      - DOCUMENT_AI_LOCATION=${DOCUMENT_AI_LOCATION}
+      - DOCUMENT_AI_PROCESSOR_ID=${DOCUMENT_AI_PROCESSOR_ID}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/google-credentials.json
+    volumes:
+      - ./credentials:/app/credentials
+      - ../services/document-processor:/app
+    restart: always
+    depends_on:
+      - qdrant
+    networks:
+      - technicia-network
+
+  # Vision AI Classifier Service
+  vision-classifier:
+    build:
+      context: ../services/vision-classifier
+      dockerfile: Dockerfile
+    container_name: technicia-vision-classifier
+    ports:
+      - "8002:8000"
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/google-credentials.json
+    volumes:
+      - ./credentials:/app/credentials
+      - ../services/vision-classifier:/app
+    restart: always
+    networks:
+      - technicia-network
+
+  # Vector Store Interface
+  vector-store:
+    build:
+      context: ../services/vector-store
+      dockerfile: Dockerfile
+    container_name: technicia-vector-store
+    ports:
+      - "8003:8000"
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - COLLECTION_NAME=technicia
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
+    restart: always
+    depends_on:
+      - qdrant
+    networks:
+      - technicia-network
+
+networks:
+  technicia-network:
+    driver: bridge
