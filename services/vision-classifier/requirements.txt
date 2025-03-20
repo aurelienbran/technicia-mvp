@@ -1,0 +1,10 @@
+fastapi==0.105.0
+uvicorn==0.24.0
+pydantic==2.5.2
+python-multipart==0.0.6
+google-cloud-vision==3.4.5
+google-cloud-storage==2.13.0
+asyncio==3.4.3
+aiofiles==23.2.1
+pillow==10.1.0
+numpy==1.26.2
