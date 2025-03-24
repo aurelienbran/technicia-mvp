@@ -17,6 +17,7 @@ services:
       - N8N_LOG_LEVEL=info
     volumes:
       - ./n8n/data:/home/node/.n8n
+      - ../scripts:/home/node/scripts
     networks:
       - technicia-network
 
@@ -40,6 +41,24 @@ services:
           memory: 4G
     networks:
       - technicia-network
+
+  # Service d'initialisation Qdrant
+  qdrant-init:
+    build:
+      context: ..
+      dockerfile: docker/init_scripts/Dockerfile.init
+    container_name: technicia-qdrant-init
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - COLLECTION_NAME=technicia
+    volumes:
+      - ../scripts:/app/scripts
+    depends_on:
+      - qdrant
+    networks:
+      - technicia-network
+    restart: "no"
 
   # Document Processor Service
   document-processor:
@@ -93,9 +112,12 @@ services:
       - QDRANT_PORT=6333
       - COLLECTION_NAME=technicia
       - VOYAGE_API_KEY=${VOYAGE_API_KEY}
+    volumes:
+      - ../services/vector-store:/app
     restart: always
     depends_on:
       - qdrant
+      - qdrant-init
     networks:
       - technicia-network
 
