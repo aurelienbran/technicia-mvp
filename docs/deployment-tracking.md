@@ -1,151 +1,130 @@
-# Suivi de Déploiement TechnicIA MVP
+# Suivi de déploiement - TechnicIA MVP
 
-## Instructions d'utilisation
+Ce document trace l'historique des déploiements du MVP de TechnicIA et sert de référence pour l'équipe technique.
 
-Ce document sert à suivre le processus de déploiement du MVP TechnicIA. Il permet de documenter les étapes, les problèmes rencontrés et les configurations spécifiques à chaque environnement. 
+## Environnement de production
 
-Pour chaque étape de déploiement, indiquez :
-- La date de début/fin
-- Le statut (Non commencé, En cours, Complété, Bloqué)
-- Le responsable
-- Les problèmes rencontrés et leur résolution
-- Les configurations spécifiques appliquées
+### VPS OVH (Gravelines GRA11)
 
-## État Global du Déploiement
+- **Système :** Ubuntu Server 22.04 LTS
+- **Configuration :** 4 vCores, 8 Go RAM, 160 Go SSD
+- **Domaine :** technicia.exemple.fr (à configurer)
+- **URL d'accès :** https://technicia.exemple.fr (à configurer)
+- **URL de l'administration n8n :** https://technicia.exemple.fr:5678 (à configurer)
 
-**Date de dernière mise à jour :** 24 mars 2025  
-**État global :** En préparation  
-**Environnement en cours :** N/A  
-**Prochaine étape :** Déploiement sur environnement de test
+## État actuel du déploiement
 
-## Environnements
+### Phase de préparation (complétée)
 
-| Environnement | Statut | URL | Serveur | Version |
-|---------------|--------|-----|---------|---------|
-| Test | Non déployé | https://test-technicia.exemple.fr | VPS-TEST-XYZ | - |
-| Staging | Non déployé | https://staging-technicia.exemple.fr | VPS-STAGING-XYZ | - |
-| Production | Non déployé | https://technicia.exemple.fr | VPS-PROD-XYZ | - |
+- ✅ Configuration du VPS
+- ✅ Mise à jour du système
+- ✅ Installation des dépendances de base
+- ✅ Configuration du pare-feu (UFW)
+- ✅ Installation de Docker et Docker Compose
+- ✅ Installation de Certbot pour HTTPS
 
-## Configuration du Serveur OVH
+### Phase d'installation (complétée)
 
-### Informations du Serveur de Production
+- ✅ Clonage du repository
+- ✅ Configuration des variables d'environnement
+- ✅ Construction des images Docker
+- ✅ Démarrage des services Docker
+- ✅ Vérification du fonctionnement de base des services
 
-| Paramètre | Valeur |
-|-----------|--------|
-| Type de serveur | VPS |
-| Modèle | VPS-SSD-4 |
-| CPU | 4 vCores |
-| RAM | 8 GB |
-| Stockage | 160 GB SSD |
-| OS | Ubuntu Server 22.04 LTS |
-| Localisation | Gravelines (GRA11) |
-| IP | À compléter |
-| Nom de domaine | À compléter |
+### Phase de configuration (en cours)
 
-### Firewall Configuration
+- ✅ Configuration de Qdrant
+- ✅ Initialisation des collections vectorielles
+- ✅ Configuration de n8n
+- ✅ Import des workflows n8n
+- ⚠️ Configuration des credentials d'API (Google Cloud, Anthropic, VoyageAI)
+- ⚠️ Configuration des webhooks
 
-| Port | Service | Commentaire |
-|------|---------|-------------|
-| 22/tcp | SSH | Accès administrateur |
-| 80/tcp | HTTP | Redirection vers HTTPS |
-| 443/tcp | HTTPS | Frontend + API |
-| 5678/tcp | n8n | Administration des workflows (accès interne uniquement) |
-| 6333/tcp | Qdrant API | Base vectorielle (accès interne uniquement) |
+### Phase de déploiement frontend (complétée)
 
-## Processus de Déploiement - Environnement de Test
+- ✅ Build de l'application React
+- ✅ Configuration Nginx comme reverse proxy
+- ✅ Mise en place des redirections et règles de routage
+- ✅ Configuration des entêtes de sécurité
 
-| Étape | Statut | Date début | Date fin | Responsable | Commentaires |
-|-------|--------|------------|----------|-------------|--------------|
-| **Préparation du serveur** | Non commencé | - | - | - | - |
-| - Installation OS | Non commencé | - | - | - | - |
-| - Configuration Firewall | Non commencé | - | - | - | - |
-| - Installation Docker | Non commencé | - | - | - | - |
-| **Déploiement des services** | Non commencé | - | - | - | - |
-| - Clonage du repository | Non commencé | - | - | - | - |
-| - Configuration des clés API | Non commencé | - | - | - | - |
-| - Exécution du script de déploiement | Non commencé | - | - | - | - |
-| **Configuration de n8n** | Non commencé | - | - | - | - |
-| - Génération clé de chiffrement | Non commencé | - | - | - | - |
-| - Configuration variables d'environnement | Non commencé | - | - | - | - |
-| - Configuration HTTPS pour n8n | Non commencé | - | - | - | - |
-| - Import des workflows | Non commencé | - | - | - | - |
-| - Configuration des credentials | Non commencé | - | - | - | - |
-| **Configuration HTTPS** | Non commencé | - | - | - | - |
-| - Configuration DNS | Non commencé | - | - | - | - |
-| - Installation Certbot | Non commencé | - | - | - | - |
-| - Obtention certificats SSL | Non commencé | - | - | - | - |
-| **Tests post-déploiement** | Non commencé | - | - | - | - |
-| - Tests fonctionnels | Non commencé | - | - | - | - |
-| - Tests des workflows n8n | Non commencé | - | - | - | - |
-| - Tests de performance | Non commencé | - | - | - | - |
-| - Tests de sécurité | Non commencé | - | - | - | - |
-| **Configuration monitoring** | Non commencé | - | - | - | - |
-| - Installation du script de monitoring | Non commencé | - | - | - | - |
-| - Configuration des alertes | Non commencé | - | - | - | - |
-| - Tests des alertes | Non commencé | - | - | - | - |
+### Phase de sécurisation (en cours)
 
-## Processus de Déploiement - Environnement de Staging
+- ✅ Obtention des certificats SSL
+- ⚠️ Configuration HTTPS pour tous les services exposés
+- ⚠️ Mise en place de la rotation des logs
+- ⚠️ Configuration des sauvegardes automatiques
 
-| Étape | Statut | Date début | Date fin | Responsable | Commentaires |
-|-------|--------|------------|----------|-------------|--------------|
-| **Préparation du serveur** | Non commencé | - | - | - | - |
-| **Déploiement des services** | Non commencé | - | - | - | - |
-| **Configuration de n8n** | Non commencé | - | - | - | - |
-| **Configuration HTTPS** | Non commencé | - | - | - | - |
-| **Tests post-déploiement** | Non commencé | - | - | - | - |
-| **Configuration monitoring** | Non commencé | - | - | - | - |
+### Phase de monitoring (planifiée)
 
-## Processus de Déploiement - Environnement de Production
+- ⚠️ Installation des outils de monitoring
+- ⚠️ Configuration des alertes
+- ⚠️ Mise en place du dashboard de supervision
 
-| Étape | Statut | Date début | Date fin | Responsable | Commentaires |
-|-------|--------|------------|----------|-------------|--------------|
-| **Préparation du serveur** | Non commencé | - | - | - | - |
-| **Déploiement des services** | Non commencé | - | - | - | - |
-| **Configuration de n8n** | Non commencé | - | - | - | - |
-| **Configuration HTTPS** | Non commencé | - | - | - | - |
-| **Tests post-déploiement** | Non commencé | - | - | - | - |
-| **Configuration monitoring** | Non commencé | - | - | - | - |
+## Historique des déploiements
 
-## Configuration des Clés API
+### 24/03/2025 - Déploiement initial
 
-| Service | Environnement | Statut | Commentaires |
-|---------|---------------|--------|--------------|
-| Google Cloud (Document AI) | Test | Non configuré | - |
-| Google Cloud (Document AI) | Staging | Non configuré | - |
-| Google Cloud (Document AI) | Production | Non configuré | - |
-| Google Cloud (Vision AI) | Test | Non configuré | - |
-| Google Cloud (Vision AI) | Staging | Non configuré | - |
-| Google Cloud (Vision AI) | Production | Non configuré | - |
-| VoyageAI | Test | Non configuré | - |
-| VoyageAI | Staging | Non configuré | - |
-| VoyageAI | Production | Non configuré | - |
-| Anthropic (Claude) | Test | Non configuré | - |
-| Anthropic (Claude) | Staging | Non configuré | - |
-| Anthropic (Claude) | Production | Non configuré | - |
-| n8n Encryption Key | Test | Non configuré | Clé nécessaire pour le chiffrement des credentials n8n |
-| n8n Encryption Key | Staging | Non configuré | Clé nécessaire pour le chiffrement des credentials n8n |
-| n8n Encryption Key | Production | Non configuré | Clé nécessaire pour le chiffrement des credentials n8n |
+- Mise en place de l'infrastructure de base
+- Installation de Docker et des services essentiels
+- Configuration initiale du réseau et du pare-feu
+- Tests de fonctionnement basiques effectués avec succès
+- Problèmes identifiés: voir [deployment-issues.md](./deployment-issues.md)
 
-## Problèmes Rencontrés
+### 25/03/2025 - Prévu: Déploiement complet du MVP
 
-> Note: Les problèmes détaillés sont suivis dans le fichier `docs/deployment-issues.md`
+- Configuration finale des services
+- Mise en place HTTPS
+- Tests d'intégration complets
+- Finalisation des workflows n8n
+- Optimisation des performances
 
-| ID | Environnement | Description | Statut | Date identification | Date résolution | Solution |
-|----|---------------|-------------|--------|---------------------|-----------------|----------|
-| - | - | - | - | - | - | - |
+## Instructions pour le déploiement
 
-## Maintenance et Mises à Jour Planifiées
+### Déploiement automatisé (recommandé)
 
-| Date | Type | Environnement | Description | Responsable | Statut |
-|------|------|---------------|-------------|-------------|--------|
-| - | - | - | - | - | - |
+Pour déployer TechnicIA sur un nouvel environnement:
 
-## Notes et Observations
+```bash
+git clone https://github.com/aurelienbran/technicia-mvp.git
+cd technicia-mvp
+sudo ./scripts/installer.sh  # Installation des prérequis
+./scripts/deploy.sh          # Déploiement des services
+```
 
-- Les quotas d'API pour les services cloud doivent être vérifiés et ajustés avant le déploiement en production
-- La configuration DNS doit être effectuée au moins 24h avant le déploiement pour permettre la propagation
-- Un monitoring des coûts des services cloud doit être mis en place après le déploiement en production
-- La documentation utilisateur doit être finalisée avant le déploiement en production
-- Les workflows n8n doivent être testés individuellement pour s'assurer de leur bon fonctionnement
-- La clé de chiffrement n8n doit être sécurisée et sauvegardée - sa perte rendrait les credentials irrécupérables
-- Les certificats SSL pour n8n doivent être renouvelés en même temps que ceux du frontend
+### Mise à jour depuis le serveur VPS
+
+Pour mettre à jour le code sur votre environnement local depuis le VPS:
+
+```bash
+# Si le VPS est configuré comme remote
+git fetch vps
+git merge vps/main
+
+# Pour ajouter le VPS comme remote si ce n'est pas déjà fait
+git remote add vps ssh://user@ip_du_vps/opt/technicia
+```
+
+Pour récupérer les derniers commits depuis GitHub sur le VPS:
+
+```bash
+ssh user@ip_du_vps "cd /opt/technicia && git fetch origin && git pull origin main"
+```
+
+Pour redéployer après une mise à jour:
+
+```bash
+ssh user@ip_du_vps "cd /opt/technicia && ./scripts/deploy.sh"
+```
+
+## Vérification du déploiement
+
+Pour vérifier que tous les services sont opérationnels:
+
+```bash
+ssh user@ip_du_vps "cd /opt/technicia && ./scripts/monitor.sh"
+```
+
+## Contacts en cas de problème
+
+- **Responsable technique :** [Nom du responsable technique]
+- **Contact d'urgence :** [Contact d'urgence]
