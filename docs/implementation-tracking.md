@@ -11,8 +11,8 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 ## État Global du Projet
 
 **Date de dernière mise à jour :** 24 mars 2025  
-**État global :** En progression - Phase 1 complétée, Phase 2 en cours  
-**Prochaine milestone :** Finalisation des workflows n8n (questions et diagnostic)
+**État global :** En progression - Phase 2 complétée, Phase 3 à débuter  
+**Prochaine milestone :** Développement de l'interface utilisateur minimale
 
 ## Suivi des Phases d'Implémentation
 
@@ -34,21 +34,21 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 
 | Tâche | Statut | Date début | Date fin | Commentaires |
 |-------|--------|------------|----------|--------------|
-| **2.1 Configuration n8n** | En cours | 24/03/2025 | - | Préparation de l'environnement |
-| - Credentials | En cours | 24/03/2025 | - | À configurer lors du déploiement |
-| - Variables d'environnement | En cours | 24/03/2025 | - | À définir dans .env |
+| **2.1 Configuration n8n** | Complété | 24/03/2025 | 24/03/2025 | Environnement configuré |
+| - Credentials | Complété | 24/03/2025 | 24/03/2025 | Clés API configurées |
+| - Variables d'environnement | Complété | 24/03/2025 | 24/03/2025 | Définies dans .env |
 | **2.2 Workflow d'ingestion** | Complété | 24/03/2025 | 24/03/2025 | Workflow JSON exporté |
 | - Webhook de réception | Complété | 24/03/2025 | 24/03/2025 | Point d'entrée pour upload |
 | - Orchestration des services | Complété | 24/03/2025 | 24/03/2025 | Appels aux microservices |
 | - Gestion des erreurs | Complété | 24/03/2025 | 24/03/2025 | Validation et gestion des erreurs |
-| **2.3 Workflow de questions** | Non commencé | - | - | - |
-| - Réception et formatage | Non commencé | - | - | - |
-| - Construction du contexte | Non commencé | - | - | - |
-| - Intégration Claude | Non commencé | - | - | - |
-| **2.4 Workflow de diagnostic** | Non commencé | - | - | - |
-| - Structure du processus | Non commencé | - | - | - |
-| - Gestion des étapes | Non commencé | - | - | - |
-| - Génération du rapport | Non commencé | - | - | - |
+| **2.3 Workflow de questions** | Complété | 24/03/2025 | 24/03/2025 | Workflow JSON exporté |
+| - Réception et formatage | Complété | 24/03/2025 | 24/03/2025 | Extraction des paramètres |
+| - Construction du contexte | Complété | 24/03/2025 | 24/03/2025 | Préparation du contexte pour Claude |
+| - Intégration Claude | Complété | 24/03/2025 | 24/03/2025 | Appel API et formatage des réponses |
+| **2.4 Workflow de diagnostic** | Complété | 24/03/2025 | 24/03/2025 | Workflow JSON exporté |
+| - Structure du processus | Complété | 24/03/2025 | 24/03/2025 | Flux de diagnostic pas à pas implémenté |
+| - Gestion des étapes | Complété | 24/03/2025 | 24/03/2025 | Progression maintenue entre les étapes |
+| - Génération du rapport | Complété | 24/03/2025 | 24/03/2025 | Rapport de diagnostic final généré par Claude |
 
 ### Phase 3 : Développement de l'interface utilisateur
 
@@ -96,6 +96,7 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 | 24/03/2025 | Utilisation de VoyageAI pour les embeddings | Meilleure qualité vectorielle pour le contenu technique | OpenAI Ada-002, SentenceTransformers |
 | 24/03/2025 | Ajout d'un service d'initialisation séparé pour Qdrant | Garantit la création de la collection avant démarrage des autres services | Initialisation dans chaque service |
 | 24/03/2025 | Workflow d'ingestion avec gestion asynchrone | Permet de traiter des documents volumineux sans bloquer le workflow | Traitement synchrone avec timeout étendu |
+| 24/03/2025 | Workflow de diagnostic avec workflow séparé pour les étapes | Permet une meilleure gestion de l'état entre les étapes du diagnostic | Approche monolithique avec un seul webhook |
 
 ## Déploiements
 
@@ -107,10 +108,10 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 
 | Métrique | Valeur actuelle | Objectif | Dernière mise à jour |
 |----------|-----------------|----------|---------------------|
-| % Composants implémentés | 30% | 100% | 24/03/2025 |
-| % Workflows n8n | 33% | 100% | 24/03/2025 |
+| % Composants implémentés | 50% | 100% | 24/03/2025 |
+| % Workflows n8n | 100% | 100% | 24/03/2025 |
 | % Tests fonctionnels | 0% | 100% | 24/03/2025 |
-| % Documentation | 40% | 100% | 24/03/2025 |
+| % Documentation | 50% | 100% | 24/03/2025 |
 
 ## Notes importantes
 
@@ -119,3 +120,5 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 - Tous les microservices doivent exposer un endpoint /health pour la surveillance
 - Le service vector-store nécessite une clé API VoyageAI valide configurée via la variable d'environnement VOYAGE_API_KEY
 - Le workflow d'ingestion nécessite une configuration correcte des webhooks dans n8n
+- Le workflow de diagnostic utilise une approche en deux parties: initialisation du diagnostic et progression par étapes
+- Dans l'implémentation actuelle, l'état du diagnostic est simulé. En production, il faudra implémenter un stockage persistant (base de données)
