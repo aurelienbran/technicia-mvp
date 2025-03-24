@@ -1,0 +1,464 @@
+{
+  "name": "Diagnostic Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "start-diagnosis",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Start Diagnosis Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "start-diagnosis"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate and extract the diagnosis request\nconst receivedData = $input.item.json;\n\nif (!receivedData.initialSymptoms) {\n  return {\n    error: 'No initial symptoms received',\n    status: 400\n  };\n}\n\n// Extract parameters\nconst initialSymptoms = receivedData.initialSymptoms;\nconst equipmentId = receivedData.equipmentId || 'generic';\nconst userId = receivedData.userId || 'anonymous';\nconst equipmentType = receivedData.equipmentType || 'unknown';\n\n// Generate a unique diagnosis ID\nconst diagnosisId = `diag_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;\n\nreturn {\n  diagnosisId,\n  initialSymptoms,\n  equipmentId,\n  equipmentType,\n  userId,\n  startTime: new Date().toISOString(),\n  status: 'initiated',\n  currentStep: 0,\n  totalSteps: 0,\n  collectedData: {}\n};"
+      },
+      "name": "Initialize Diagnosis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://vector-store:8000/search",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"{{ $json.equipmentType }} {{ $json.initialSymptoms }}\",\n  \"limit\": 10,\n  \"filter\": { \"type\": \"text\" }\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "name": "Search Initial Context",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format search results for context\nconst searchResults = $input.item.json.results || [];\nlet context = '';\nconst sources = [];\n\n// Extract context from search results\nfor (const result of searchResults) {\n  const metadata = result.metadata || {};\n  \n  if (metadata.text) {\n    // Add the text to context with page reference\n    context += `\\n\\nEXTRAIT (page ${metadata.page_number || 'N/A'}):\\n${metadata.text}`;\n    \n    // Add the source if not already included\n    if (metadata.document_name && !sources.includes(metadata.document_name)) {\n      sources.push(metadata.document_name);\n    }\n  }\n}\n\n// Build the sources list\nlet sourcesText = '';\nif (sources.length > 0) {\n  sourcesText = '\\n\\nSOURCES:\\n' + sources.map(s => `- ${s}`).join('\\n');\n}\n\n// Combine with diagnosis info\nconst diagnosisInfo = {\n  diagnosisId: $('Initialize Diagnosis').item.json.diagnosisId,\n  equipmentId: $('Initialize Diagnosis').item.json.equipmentId,\n  equipmentType: $('Initialize Diagnosis').item.json.equipmentType,\n  initialSymptoms: $('Initialize Diagnosis').item.json.initialSymptoms,\n  userId: $('Initialize Diagnosis').item.json.userId,\n  startTime: $('Initialize Diagnosis').item.json.startTime\n};\n\nreturn {\n  ...diagnosisInfo,\n  context,\n  sourcesText,\n  fullContext: `${context}${sourcesText}`,\n  status: 'context_prepared',\n  currentStep: 0\n};"
+      },
+      "name": "Prepare Initial Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "claude-3-5-sonnet-20240620"
+            },
+            {
+              "name": "max_tokens",
+              "value": "4000"
+            },
+            {
+              "name": "temperature",
+              "value": "0.1"
+            },
+            {
+              "name": "system",
+              "value": "Tu es TechnicIA, un assistant de diagnostic technique pour les équipements industriels. Tu dois créer un plan de diagnostic structuré en étapes, basé sur les symptômes initiaux et le contexte fourni. Ce plan sera utilisé pour guider un technicien dans un processus de diagnostic pas à pas.\n\nTon plan de diagnostic doit :\n\n1. Comprendre entre 5 et 7 étapes logiques\n2. Suivre une approche méthodique d'élimination des causes\n3. Aller du plus probable au moins probable\n4. Inclure pour chaque étape :\n   - Un titre court descriptif\n   - Une description détaillée de ce qu'il faut vérifier\n   - Des instructions précises pour les tests à effectuer\n   - Les résultats attendus (normal vs. anormal)\n   - Une question spécifique à poser au technicien\n\nRéponds uniquement avec le plan de diagnostic structuré en JSON avec ce format :\n{\n  \"totalSteps\": nombre_étapes,\n  \"steps\": [\n    {\n      \"stepNumber\": 1,\n      \"title\": \"Titre de l'étape\",\n      \"description\": \"Description détaillée\",\n      \"instructions\": \"Instructions précises\",\n      \"expectedResults\": \"Résultats attendus\",\n      \"question\": \"Question pour le technicien\"\n    },\n    // autres étapes\n  ]\n}"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\n  \"role\": \"user\",\n  \"content\": \"Je dois diagnostiquer un problème sur un équipement de type {{$json.equipmentType}} avec les symptômes suivants :\\n\\n{{$json.initialSymptoms}}\\n\\nVoici le contexte extrait de la documentation technique :\\n\\n{{$json.fullContext}}\\n\\nCrée un plan de diagnostic structuré pour m'aider à identifier et résoudre ce problème.\"\n}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Generate Diagnostic Plan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1120,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Claude API Authentication"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process Claude's response to extract the diagnostic plan\nconst claudeResponse = $input.item.json;\nlet diagnosticPlan;\n\ntry {\n  // Extract the content from Claude's response\n  let content = '';\n  if (claudeResponse && claudeResponse.content && claudeResponse.content.length > 0) {\n    content = claudeResponse.content[0].text;\n  } else if (claudeResponse && claudeResponse.content) {\n    content = claudeResponse.content;\n  } else {\n    throw new Error('Format de réponse Claude inattendu');\n  }\n  \n  // Extract JSON from the content\n  // First, try to find JSON between backticks if Claude wrapped it\n  let jsonMatch = content.match(/```json\\s*([\\s\\S]*?)\\s*```/);\n  \n  if (jsonMatch && jsonMatch[1]) {\n    diagnosticPlan = JSON.parse(jsonMatch[1].trim());\n  } else {\n    // If not in backticks, try to parse the entire content as JSON\n    try {\n      diagnosticPlan = JSON.parse(content.trim());\n    } catch (e) {\n      // If all else fails, use regex to find a JSON object pattern\n      jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n      if (jsonMatch) {\n        diagnosticPlan = JSON.parse(jsonMatch[0]);\n      } else {\n        throw new Error('Impossible de trouver un plan de diagnostic valide dans la réponse');\n      }\n    }\n  }\n  \n  // Get previous data\n  const diagnosisData = {\n    diagnosisId: $('Prepare Initial Context').item.json.diagnosisId,\n    equipmentId: $('Prepare Initial Context').item.json.equipmentId,\n    equipmentType: $('Prepare Initial Context').item.json.equipmentType,\n    initialSymptoms: $('Prepare Initial Context').item.json.initialSymptoms,\n    userId: $('Prepare Initial Context').item.json.userId,\n    startTime: $('Prepare Initial Context').item.json.startTime,\n    context: $('Prepare Initial Context').item.json.context,\n    sourcesText: $('Prepare Initial Context').item.json.sourcesText\n  };\n  \n  // Create the complete diagnosis state\n  return {\n    ...diagnosisData,\n    status: 'plan_generated',\n    currentStep: 1,  // First step is 1\n    totalSteps: diagnosticPlan.totalSteps,\n    diagnosticPlan: diagnosticPlan,\n    collectedData: {},\n    lastUpdate: new Date().toISOString()\n  };\n  \n} catch (error) {\n  // In case of error\n  return {\n    diagnosisId: $('Prepare Initial Context').item.json.diagnosisId,\n    status: 'error',\n    error: `Erreur lors de la génération du plan: ${error.message}`,\n    lastUpdate: new Date().toISOString()\n  };\n}"
+      },
+      "name": "Process Diagnostic Plan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format the current step data for response\nconst diagnosticState = $input.item.json;\nconst diagnosticPlan = diagnosticState.diagnosticPlan;\n\nif (!diagnosticPlan || !diagnosticPlan.steps) {\n  return {\n    error: 'Plan de diagnostic invalide',\n    diagnosisId: diagnosticState.diagnosisId,\n    status: 'error'\n  };\n}\n\n// Get the current step\nconst currentStepNumber = diagnosticState.currentStep;\nconst currentStep = diagnosticPlan.steps.find(step => step.stepNumber === currentStepNumber);\n\nif (!currentStep) {\n  return {\n    error: `Étape ${currentStepNumber} non trouvée dans le plan`,\n    diagnosisId: diagnosticState.diagnosisId,\n    status: 'error'\n  };\n}\n\n// Format the response\nconst response = {\n  diagnosisId: diagnosticState.diagnosisId,\n  status: diagnosticState.status,\n  progress: {\n    currentStep: currentStepNumber,\n    totalSteps: diagnosticState.totalSteps,\n    percentComplete: Math.round((currentStepNumber / diagnosticState.totalSteps) * 100)\n  },\n  currentStepData: {\n    ...currentStep\n  },\n  equipment: {\n    id: diagnosticState.equipmentId,\n    type: diagnosticState.equipmentType\n  },\n  initialSymptoms: diagnosticState.initialSymptoms,\n  nextStepWebhook: `/diagnosis-step?diagnosisId=${diagnosticState.diagnosisId}`\n};\n\nreturn response;"
+      },
+      "name": "Format Current Step Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Return Diagnosis Initiation",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "path": "diagnosis-step",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Diagnosis Step Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        580
+      ],
+      "webhookId": "diagnosis-step"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and validate the diagnosis step data\nconst receivedData = $input.item.json;\nconst queryParams = $input.item.params;\n\n// Get diagnosis ID from query parameters or body\nconst diagnosisId = queryParams.diagnosisId || receivedData.diagnosisId;\n\nif (!diagnosisId) {\n  return {\n    error: 'No diagnosis ID provided',\n    status: 400\n  };\n}\n\nif (!receivedData.response) {\n  return {\n    error: 'No response provided for the current step',\n    status: 400,\n    diagnosisId\n  };\n}\n\n// Extract essential data\nconst stepResponse = receivedData.response;\nconst stepNumber = receivedData.stepNumber || queryParams.stepNumber;\nconst notes = receivedData.notes || '';\n\nreturn {\n  diagnosisId,\n  stepNumber: parseInt(stepNumber, 10),\n  response: stepResponse,\n  notes,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "name": "Validate Step Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        460,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// This function simulates retrieving the diagnostic state from a database\n// In a real implementation, this would be a DB call using the diagnosisId\n\n// For demo purposes, we'll create a mock diagnostic state\nconst mockDiagnosticState = {\n  diagnosisId: $input.item.json.diagnosisId,\n  equipmentId: 'demo-equipment',\n  equipmentType: 'hydraulic-system',\n  initialSymptoms: 'Pression hydraulique trop faible et bruit anormal',\n  userId: 'test-user',\n  startTime: new Date(Date.now() - 1000 * 60 * 10).toISOString(), // 10 minutes ago\n  status: 'in_progress',\n  currentStep: $input.item.json.stepNumber,\n  totalSteps: 5,\n  diagnosticPlan: {\n    totalSteps: 5,\n    steps: [\n      {\n        stepNumber: 1,\n        title: \"Vérification de la pression hydraulique\",\n        description: \"Mesurer la pression du système avec un manomètre\",\n        instructions: \"Connecter le manomètre au point de test TP1\",\n        expectedResults: \"La pression devrait être entre 150-200 bar\",\n        question: \"Quelle est la pression mesurée?\"\n      },\n      {\n        stepNumber: 2,\n        title: \"Inspection du niveau d'huile\",\n        description: \"Vérifier le niveau et la qualité de l'huile hydraulique\",\n        instructions: \"Consulter l'indicateur de niveau\",\n        expectedResults: \"Le niveau doit être entre les repères min et max\",\n        question: \"Le niveau d'huile est-il correct et l'huile est-elle propre?\"\n      },\n      {\n        stepNumber: 3,\n        title: \"Contrôle de la pompe hydraulique\",\n        description: \"Évaluer le fonctionnement de la pompe hydraulique\",\n        instructions: \"Écouter les bruits anormaux et vérifier la température\",\n        expectedResults: \"Fonctionnement silencieux, température normale\",\n        question: \"La pompe fait-elle un bruit anormal ou est-elle trop chaude?\"\n      },\n      {\n        stepNumber: 4,\n        title: \"Vérification des filtres\",\n        description: \"Inspecter l'état des filtres hydrauliques\",\n        instructions: \"Retirer les filtres et vérifier leur état\",\n        expectedResults: \"Filtres propres sans colmatage\",\n        question: \"Quel est l'état des filtres hydrauliques?\"\n      },\n      {\n        stepNumber: 5,\n        title: \"Test des soupapes de sécurité\",\n        description: \"Vérifier le fonctionnement des soupapes de sécurité\",\n        instructions: \"Tester la pression de déclenchement\",\n        expectedResults: \"Déclenchement à la pression nominale\",\n        question: \"Les soupapes se déclenchent-elles à la bonne pression?\"\n      }\n    ]\n  },\n  collectedData: {},\n  context: \"[Contexte technique simulé pour la démonstration]\",\n  lastUpdate: new Date(Date.now() - 1000 * 60 * 5).toISOString() // 5 minutes ago\n};\n\n// In a real implementation, the following code would remain the same,\n// but the diagnosticState would come from a database\n\n// Update the collected data for this step\nmockDiagnosticState.collectedData[`step${$input.item.json.stepNumber}`] = {\n  response: $input.item.json.response,\n  notes: $input.item.json.notes,\n  timestamp: $input.item.json.timestamp\n};\n\n// Determine next step\nconst currentStep = parseInt($input.item.json.stepNumber, 10);\nconst nextStep = currentStep + 1;\n\n// Check if this was the last step\nif (nextStep > mockDiagnosticState.totalSteps) {\n  mockDiagnosticState.status = 'completed';\n  mockDiagnosticState.currentStep = currentStep; // Remain on last step\n} else {\n  mockDiagnosticState.status = 'in_progress';\n  mockDiagnosticState.currentStep = nextStep;\n}\n\nmockDiagnosticState.lastUpdate = new Date().toISOString();\n\nreturn mockDiagnosticState;"
+      },
+      "name": "Update Diagnostic State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        680,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equal",
+              "value2": "completed"
+            }
+          ]
+        }
+      },
+      "name": "Diagnosis Completed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        900,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "claude-3-5-sonnet-20240620"
+            },
+            {
+              "name": "max_tokens",
+              "value": "4000"
+            },
+            {
+              "name": "temperature",
+              "value": "0.1"
+            },
+            {
+              "name": "system",
+              "value": "Tu es TechnicIA, un assistant de diagnostic technique pour les équipements industriels. Tu dois générer un rapport de diagnostic complet basé sur les informations recueillies pendant le processus de diagnostic.\n\nTon rapport doit comprendre :\n1. Un résumé des symptômes initiaux\n2. Les résultats clés de chaque étape du diagnostic\n3. Une analyse des causes probables\n4. Un diagnostic final avec niveau de confiance\n5. Des recommandations d'actions\n6. Éventuellement des pièces à remplacer ou des interventions spécifiques\n\nUtilise uniquement les informations fournies dans les données recueillies. Si certaines informations sont manquantes, indique-le clairement.\n\nRéponds en français avec un rapport structuré et professionnel."
+            },
+            {
+              "name": "messages",
+              "value": "=[{\n  \"role\": \"user\",\n  \"content\": \"Génère un rapport de diagnostic technique complet basé sur les informations suivantes :\\n\\nÉquipement : {{$json.equipmentType}}\\nSymptômes initiaux : {{$json.initialSymptoms}}\\n\\nDonnées recueillies durant le diagnostic :\\n{% for key, value in $json.collectedData %}\\nÉtape {{key.replace('step', '')}} - {{$json.diagnosticPlan.steps[key.replace('step', '')-1].title}} :\\nQuestion: {{$json.diagnosticPlan.steps[key.replace('step', '')-1].question}}\\nRéponse: {{value.response}}\\n{% if value.notes %}Notes: {{value.notes}}{% endif %}\\n{% endfor %}\\n\\nContexte technique (documentation) :\\n{{$json.context}}\\n\\nPrépare un rapport de diagnostic complet avec analyse des causes et recommandations.\"\n}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Generate Diagnosis Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1120,
+        480
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Claude API Authentication"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process the current step for response\nconst diagnosticState = $input.item.json;\n\n// Get the current step\nconst currentStep = diagnosticState.diagnosticPlan.steps.find(\n  step => step.stepNumber === diagnosticState.currentStep\n);\n\nif (!currentStep) {\n  return {\n    error: `Étape ${diagnosticState.currentStep} non trouvée dans le plan`,\n    diagnosisId: diagnosticState.diagnosisId,\n    status: 'error'\n  };\n}\n\n// Format the response\nconst response = {\n  diagnosisId: diagnosticState.diagnosisId,\n  status: diagnosticState.status,\n  progress: {\n    currentStep: diagnosticState.currentStep,\n    totalSteps: diagnosticState.totalSteps,\n    percentComplete: Math.round((diagnosticState.currentStep / diagnosticState.totalSteps) * 100)\n  },\n  currentStepData: {\n    ...currentStep\n  },\n  equipment: {\n    id: diagnosticState.equipmentId,\n    type: diagnosticState.equipmentType\n  },\n  nextStepWebhook: `/diagnosis-step?diagnosisId=${diagnosticState.diagnosisId}&stepNumber=${diagnosticState.currentStep}`\n};\n\nreturn response;"
+      },
+      "name": "Format Next Step Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and format the diagnosis report\nconst claudeResponse = $input.item.json;\nlet reportContent = '';\n\ntry {\n  // Extract the content from Claude's response\n  if (claudeResponse && claudeResponse.content && claudeResponse.content.length > 0) {\n    reportContent = claudeResponse.content[0].text;\n  } else if (claudeResponse && claudeResponse.content) {\n    reportContent = claudeResponse.content;\n  } else {\n    throw new Error('Format de réponse Claude inattendu');\n  }\n  \n  // Get diagnosis state data\n  const diagnosisState = $('Update Diagnostic State').item.json;\n  \n  // Format the final report response\n  const response = {\n    diagnosisId: diagnosisState.diagnosisId,\n    status: 'completed',\n    report: {\n      content: reportContent,\n      generatedAt: new Date().toISOString(),\n      initialSymptoms: diagnosisState.initialSymptoms,\n      equipmentType: diagnosisState.equipmentType,\n      equipmentId: diagnosisState.equipmentId,\n      diagnosisDuration: Math.round(\n        (new Date() - new Date(diagnosisState.startTime)) / (1000 * 60)\n      ) + ' minutes'\n    },\n    progress: {\n      currentStep: diagnosisState.totalSteps,\n      totalSteps: diagnosisState.totalSteps,\n      percentComplete: 100\n    }\n  };\n  \n  return response;\n  \n} catch (error) {\n  // In case of error\n  return {\n    diagnosisId: $('Update Diagnostic State').item.json.diagnosisId,\n    status: 'error',\n    error: `Erreur lors de la génération du rapport: ${error.message}`,\n    timestamp: new Date().toISOString()\n  };\n}"
+      },
+      "name": "Format Diagnosis Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "content": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Return Next Step",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "content": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Return Diagnosis Report",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        480
+      ]
+    }
+  ],
+  "connections": {
+    "Start Diagnosis Webhook": {
+      "main": [
+        [
+          {
+            "node": "Initialize Diagnosis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Diagnosis": {
+      "main": [
+        [
+          {
+            "node": "Search Initial Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Initial Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Initial Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Initial Context": {
+      "main": [
+        [
+          {
+            "node": "Generate Diagnostic Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Diagnostic Plan": {
+      "main": [
+        [
+          {
+            "node": "Process Diagnostic Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Diagnostic Plan": {
+      "main": [
+        [
+          {
+            "node": "Format Current Step Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Current Step Response": {
+      "main": [
+        [
+          {
+            "node": "Return Diagnosis Initiation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Diagnosis Step Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Step Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Step Response": {
+      "main": [
+        [
+          {
+            "node": "Update Diagnostic State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Diagnostic State": {
+      "main": [
+        [
+          {
+            "node": "Diagnosis Completed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Diagnosis Completed?": {
+      "main": [
+        [
+          {
+            "node": "Generate Diagnosis Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Next Step Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Diagnosis Report": {
+      "main": [
+        [
+          {
+            "node": "Format Diagnosis Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Next Step Response": {
+      "main": [
+        [
+          {
+            "node": "Return Next Step",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Diagnosis Report": {
+      "main": [
+        [
+          {
+            "node": "Return Diagnosis Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
