@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script pour initialiser et configurer Qdrant pour TechnicIA
+# Script d'initialisation et de configuration de Qdrant pour TechnicIA
 
 # Couleurs pour les logs
 GREEN='\033[0;32m'
@@ -8,10 +8,11 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Configuration
-QDRANT_HOST="localhost"
-QDRANT_PORT="6333"
-COLLECTION_NAME="technicia"
-VECTOR_SIZE=1536  # Taille du vecteur pour Voyage AI
+COLLECTION_NAME="${1:-technicia}"
+VECTOR_SIZE=1024
+DEPLOY_DIR="/opt/technicia"
+DOCKER_DIR="$DEPLOY_DIR/docker"
+TMP_SCRIPT="/tmp/qdrant_init_$$.py"
 
 # Fonction pour afficher les logs
 log() {
@@ -26,130 +27,147 @@ warn() {
   echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')] ATTENTION: $1${NC}"
 }
 
-# Attendre que Qdrant soit disponible
-wait_for_qdrant() {
-  log "Attente du démarrage de Qdrant..."
-  for i in {1..30}; do
-    if curl -s "http://${QDRANT_HOST}:${QDRANT_PORT}/collections" &> /dev/null; then
-      log "Qdrant est disponible"
-      return 0
-    fi
-    echo -n "."
-    sleep 2
-  done
-  
-  error "Timeout en attendant que Qdrant démarre"
-  return 1
-}
+# Vérifier si le conteneur Qdrant est en cours d'exécution
+log "Vérification du conteneur Qdrant..."
+if ! docker ps | grep -q "technicia-qdrant"; then
+    error "Le conteneur Qdrant n'est pas en cours d'exécution. Veuillez démarrer les services avec deploy.sh."
+    exit 1
+fi
 
-# Créer une collection Qdrant
-create_collection() {
-  log "Création de la collection '${COLLECTION_NAME}'..."
-  
-  # Vérifier si la collection existe déjà
-  COLLECTIONS=$(curl -s "http://${QDRANT_HOST}:${QDRANT_PORT}/collections")
-  if echo "$COLLECTIONS" | grep -q "\"name\":\"${COLLECTION_NAME}\""; then
-    warn "La collection '${COLLECTION_NAME}' existe déjà"
-    return 0
-  fi
-  
-  # Créer la collection avec la configuration appropriée
-  RESPONSE=$(curl -s -X PUT "http://${QDRANT_HOST}:${QDRANT_PORT}/collections/${COLLECTION_NAME}" \
-    -H 'Content-Type: application/json' \
-    -d '{
-      "vectors": {
-        "size": '${VECTOR_SIZE}',
-        "distance": "Cosine"
-      },
-      "optimizers_config": {
-        "default_segment_number": 2
-      },
-      "replication_factor": 1,
-      "write_consistency_factor": 1
-    }')
-  
-  if echo "$RESPONSE" | grep -q "\"status\":\"ok\""; then
-    log "Collection '${COLLECTION_NAME}' créée avec succès"
-  else
-    error "Échec de la création de la collection: $RESPONSE"
-    return 1
-  fi
-}
+# Vérification de pip et installation des dépendances
+log "Vérification des dépendances Python..."
+if ! command -v pip3 &> /dev/null; then
+    log "Installation de pip..."
+    sudo apt-get update
+    sudo apt-get install -y python3-pip
+fi
 
-# Créer les index pour optimiser les recherches
-create_indexes() {
-  log "Création des index sur les champs de métadonnées..."
-  
-  # Créer un index sur le champ type
-  RESPONSE=$(curl -s -X PUT "http://${QDRANT_HOST}:${QDRANT_PORT}/collections/${COLLECTION_NAME}/index" \
-    -H 'Content-Type: application/json' \
-    -d '{
-      "field_name": "type",
-      "field_schema": "keyword"
-    }')
-  
-  if echo "$RESPONSE" | grep -q "\"status\":\"ok\""; then
-    log "Index sur 'type' créé avec succès"
-  else
-    warn "Échec de la création de l'index sur 'type': $RESPONSE"
-  fi
-  
-  # Créer un index sur le champ document_id
-  RESPONSE=$(curl -s -X PUT "http://${QDRANT_HOST}:${QDRANT_PORT}/collections/${COLLECTION_NAME}/index" \
-    -H 'Content-Type: application/json' \
-    -d '{
-      "field_name": "document_id",
-      "field_schema": "keyword"
-    }')
-  
-  if echo "$RESPONSE" | grep -q "\"status\":\"ok\""; then
-    log "Index sur 'document_id' créé avec succès"
-  else
-    warn "Échec de la création de l'index sur 'document_id': $RESPONSE"
-  fi
-  
-  # Créer un index sur le champ section
-  RESPONSE=$(curl -s -X PUT "http://${QDRANT_HOST}:${QDRANT_PORT}/collections/${COLLECTION_NAME}/index" \
-    -H 'Content-Type: application/json' \
-    -d '{
-      "field_name": "section",
-      "field_schema": "keyword"
-    }')
-  
-  if echo "$RESPONSE" | grep -q "\"status\":\"ok\""; then
-    log "Index sur 'section' créé avec succès"
-  else
-    warn "Échec de la création de l'index sur 'section': $RESPONSE"
-  fi
-}
+log "Installation du client Qdrant..."
+pip3 install --quiet qdrant-client
 
-# Vérifier la configuration finale
-check_configuration() {
-  log "Vérification de la configuration finale..."
-  
-  # Récupérer les informations sur la collection
-  COLLECTION_INFO=$(curl -s "http://${QDRANT_HOST}:${QDRANT_PORT}/collections/${COLLECTION_NAME}")
-  
-  if echo "$COLLECTION_INFO" | grep -q "\"status\":\"ok\""; then
-    log "Configuration de Qdrant vérifiée avec succès"
-    log "Collection '${COLLECTION_NAME}' prête à être utilisée"
-  else
-    error "Impossible de vérifier la configuration: $COLLECTION_INFO"
-    return 1
-  fi
-}
+# Création du script Python pour initialiser Qdrant
+log "Préparation du script d'initialisation de la collection Qdrant..."
 
-# Fonction principale
-main() {
-  log "Démarrage de la configuration de Qdrant pour TechnicIA..."
-  
-  wait_for_qdrant || exit 1
-  create_collection || exit 1
-  create_indexes || warn "Certains index n'ont pas pu être créés"
-  check_configuration || exit 1
-  
-  log "Configuration de Qdrant terminée avec succès!"
-}
+cat > "$TMP_SCRIPT" << EOF
+from qdrant_client import QdrantClient
+from qdrant_client.http import models
+import sys
 
-# Exécution du script
-main
+def initialize_qdrant():
+    # Connexion au client Qdrant
+    client = QdrantClient(host="localhost", port=6333)
+    
+    # Vérifier si la collection existe déjà
+    try:
+        collections = client.get_collections().collections
+        collection_names = [c.name for c in collections]
+    except Exception as e:
+        print(f"Erreur lors de la connexion à Qdrant: {str(e)}")
+        sys.exit(1)
+    
+    # Nom de la collection
+    collection_name = "$COLLECTION_NAME"
+    
+    # Si la collection existe déjà, vérifier ses paramètres
+    if collection_name in collection_names:
+        print(f"La collection '{collection_name}' existe déjà.")
+        
+        # Vérifier les index
+        try:
+            collection_info = client.get_collection(collection_name=collection_name)
+            print(f"Vecteurs indexés: {collection_info.vectors_count}")
+            
+            # Vérifier les payload indexes
+            payload_indexes = client.list_collection_aliases(collection_name=collection_name)
+            print(f"Payload indexes: {payload_indexes}")
+            
+            return
+        except Exception as e:
+            print(f"Erreur lors de la vérification de la collection: {str(e)}")
+            sys.exit(1)
+    
+    # Créer la collection
+    try:
+        client.create_collection(
+            collection_name=collection_name,
+            vectors_config=models.VectorParams(
+                size=$VECTOR_SIZE,  # Taille des vecteurs
+                distance=models.Distance.COSINE
+            ),
+            optimizers_config=models.OptimizersConfigDiff(
+                indexing_threshold=20000
+            )
+        )
+        
+        # Créer des index sur les métadonnées importantes
+        # Index pour le type (text ou image)
+        client.create_payload_index(
+            collection_name=collection_name,
+            field_name="metadata.type",
+            field_schema=models.PayloadSchemaType.KEYWORD
+        )
+        
+        # Index pour le type de schéma (électrique, hydraulique, etc.)
+        client.create_payload_index(
+            collection_name=collection_name,
+            field_name="metadata.schema_type",
+            field_schema=models.PayloadSchemaType.KEYWORD
+        )
+        
+        # Index pour le numéro de page
+        client.create_payload_index(
+            collection_name=collection_name,
+            field_name="metadata.page_number",
+            field_schema=models.PayloadSchemaType.INTEGER
+        )
+        
+        # Index pour le nom du document
+        client.create_payload_index(
+            collection_name=collection_name,
+            field_name="metadata.document_name",
+            field_schema=models.PayloadSchemaType.KEYWORD
+        )
+        
+        print(f"Collection '{collection_name}' créée avec succès!")
+        
+    except Exception as e:
+        print(f"Erreur lors de la création de la collection: {str(e)}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    initialize_qdrant()
+EOF
+
+# Exécution du script Python
+log "Initialisation de la collection Qdrant..."
+python3 "$TMP_SCRIPT"
+
+# Vérification du résultat
+if [ $? -ne 0 ]; then
+    error "Erreur lors de l'initialisation de la collection Qdrant."
+    rm -f "$TMP_SCRIPT"
+    exit 1
+fi
+
+# Test de connexion à l'API Qdrant
+log "Test de l'API Qdrant..."
+if curl -s "http://localhost:6333/collections" > /dev/null; then
+    log "✅ API Qdrant accessible"
+else
+    warn "⚠️ API Qdrant non accessible"
+fi
+
+# Vérification de la collection
+if curl -s "http://localhost:6333/collections/$COLLECTION_NAME" > /dev/null; then
+    log "✅ Collection $COLLECTION_NAME accessible"
+else
+    warn "⚠️ Collection $COLLECTION_NAME non accessible"
+fi
+
+# Nettoyage
+rm -f "$TMP_SCRIPT"
+
+log "Configuration de Qdrant terminée avec succès!"
+log "La collection '$COLLECTION_NAME' est prête à être utilisée."
+log ""
+log "Prochaine étape: Ingérer des documents via l'interface utilisateur ou le workflow n8n d'ingestion."
