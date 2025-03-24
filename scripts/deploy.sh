@@ -59,9 +59,25 @@ backup_existing() {
     # Créer le répertoire de sauvegarde si nécessaire
     mkdir -p "$BACKUP_DIR"
     
+    # Sauvegarder les fichiers importants et les modifications locales
+    log "Sauvegarde des fichiers importants..."
+    
     # Sauvegarder le fichier .env
     if [ -f "$DEPLOY_DIR/$ENV_FILE" ]; then
-      cp "$DEPLOY_DIR/$ENV_FILE" "$DEPLOY_DIR/$ENV_FILE.backup"
+      cp "$DEPLOY_DIR/$ENV_FILE" "$BACKUP_DIR/$ENV_FILE.$DATE_TAG"
+      log "Fichier .env sauvegardé"
+    fi
+    
+    # Sauvegarder les fichiers modifiés localement
+    if [ -d "$DEPLOY_DIR/.git" ]; then
+      cd "$DEPLOY_DIR"
+      # Créer un patch des modifications locales
+      if git diff --quiet; then
+        log "Aucune modification locale à sauvegarder"
+      else
+        git diff > "$BACKUP_DIR/local_changes.$DATE_TAG.patch"
+        log "Modifications locales sauvegardées dans $BACKUP_DIR/local_changes.$DATE_TAG.patch"
+      fi
     fi
     
     # Sauvegarder les volumes Docker si nécessaire
@@ -96,8 +112,29 @@ update_code() {
   if [ -d "$DEPLOY_DIR/.git" ]; then
     # Le répertoire existe déjà, mise à jour
     cd "$DEPLOY_DIR"
+    
+    # Sauvegarder la liste des fichiers personnalisés avant la mise à jour
+    local modified_files=$(git ls-files -m)
+    
+    # Récupérer les dernières modifications sans écraser les modifications locales
+    git stash save "Sauvegarde automatique avant mise à jour - $DATE_TAG"
     git fetch
-    git reset --hard origin/main
+    
+    # Utiliser un rebase au lieu d'un reset hard pour préserver les modifications locales
+    git rebase origin/main || {
+      warn "Rebase échoué, tentative de merge..."
+      git merge origin/main || {
+        error "Impossible de mettre à jour le code source."
+        git stash pop
+        exit 1
+      }
+    }
+    
+    # Restaurer les modifications locales si possible
+    if git stash list | grep -q "Sauvegarde automatique avant mise à jour"; then
+      git stash pop || warn "Impossible de restaurer certaines modifications locales. Résolvez les conflits manuellement."
+    fi
+    
     log "Code mis à jour depuis le dépôt git"
   else
     # Clonage initial
@@ -112,9 +149,12 @@ setup_environment() {
   log "Configuration de l'environnement..."
   
   # Restaurer le fichier .env s'il existe en backup
-  if [ -f "$DEPLOY_DIR/$ENV_FILE.backup" ]; then
+  if [ -f "$BACKUP_DIR/$ENV_FILE.$DATE_TAG" ]; then
+    cp "$BACKUP_DIR/$ENV_FILE.$DATE_TAG" "$DEPLOY_DIR/$ENV_FILE"
+    log "Fichier .env restauré depuis la sauvegarde récente"
+  elif [ -f "$DEPLOY_DIR/$ENV_FILE.backup" ]; then
     cp "$DEPLOY_DIR/$ENV_FILE.backup" "$DEPLOY_DIR/$ENV_FILE"
-    log "Fichier .env restauré depuis la sauvegarde"
+    log "Fichier .env restauré depuis la sauvegarde précédente"
   else
     # Créer un fichier .env par défaut si nécessaire
     if [ ! -f "$DEPLOY_DIR/$ENV_FILE" ]; then
@@ -125,6 +165,7 @@ DOCUMENT_AI_PROJECT=votre-projet-document-ai
 DOCUMENT_AI_LOCATION=votre-région-document-ai
 DOCUMENT_AI_PROCESSOR_ID=votre-processor-id
 VOYAGE_API_KEY=votre-clé-voyage-ai
+ANTHROPIC_API_KEY=votre-clé-anthropic
 EOF
       warn "Un fichier .env par défaut a été créé. Veuillez le modifier avec vos propres clés d'API."
     fi
@@ -138,6 +179,15 @@ EOF
     warn "Le fichier d'identifiants Google Cloud n'existe pas."
     warn "Veuillez créer le fichier docker/credentials/google-credentials.json avec vos identifiants Google Cloud."
   fi
+  
+  # Appliquer les correctifs automatiques
+  log "Application des correctifs automatiques..."
+  if [ -f "$DEPLOY_DIR/scripts/apply-patches.sh" ]; then
+    chmod +x "$DEPLOY_DIR/scripts/apply-patches.sh"
+    "$DEPLOY_DIR/scripts/apply-patches.sh" || warn "Problème lors de l'application des correctifs"
+  else
+    warn "Script de correctifs introuvable. Les correctifs ne seront pas appliqués."
+  fi
 }
 
 # Construire et démarrer les conteneurs
@@ -145,6 +195,19 @@ start_services() {
   log "Démarrage des services..."
   
   cd "$DEPLOY_DIR/docker"
+  
+  # S'assurer que .env est accessible aux services Docker
+  if [ -f "$DEPLOY_DIR/$ENV_FILE" ] && [ ! -f "$DEPLOY_DIR/docker/.env" ]; then
+    ln -sf "$DEPLOY_DIR/$ENV_FILE" "$DEPLOY_DIR/docker/.env"
+    log "Lien symbolique créé pour le fichier .env dans le répertoire docker"
+  fi
+  
+  # Vérifier si les variables d'environnement sont chargées
+  if ! env | grep -q "N8N_ENCRYPTION_KEY"; then
+    warn "Les variables d'environnement ne semblent pas être chargées."
+    warn "Chargement manuel du fichier .env..."
+    export $(grep -v '^#' "$DEPLOY_DIR/$ENV_FILE" | xargs)
+  fi
   
   # Construire les images
   docker-compose build || { error "Échec de la construction des images Docker"; exit 1; }
