@@ -12,14 +12,16 @@ Ce guide détaille les étapes nécessaires pour installer et déployer le MVP d
 6. [Déploiement](#déploiement)
    - [Méthode automatisée (recommandée)](#méthode-automatisée-recommandée)
    - [Méthode manuelle](#méthode-manuelle)
-7. [Configuration de n8n](#configuration-de-n8n)
-8. [Configuration de Qdrant](#configuration-de-qdrant)
-9. [Configuration HTTPS](#configuration-https)
-10. [Vérification](#vérification)
-11. [Monitoring](#monitoring)
-12. [Sauvegarde et restauration](#sauvegarde-et-restauration)
-13. [Dépannage](#dépannage)
-14. [Mise à jour](#mise-à-jour)
+7. [Scripts de configuration automatique](#scripts-de-configuration-automatique)
+   - [Configuration de n8n](#configuration-de-n8n)
+   - [Configuration HTTPS](#configuration-https)
+   - [Configuration de Qdrant](#configuration-de-qdrant)
+   - [Configuration des workflows](#configuration-des-workflows)
+8. [Vérification](#vérification)
+9. [Monitoring](#monitoring)
+10. [Sauvegarde et restauration](#sauvegarde-et-restauration)
+11. [Dépannage](#dépannage)
+12. [Mise à jour](#mise-à-jour)
 
 ## Introduction
 
@@ -176,7 +178,7 @@ chmod +x /opt/technicia/scripts/deploy.sh
 /opt/technicia/scripts/deploy.sh
 ```
 
-Le script amélioré effectue les opérations suivantes :
+Le script effectue les opérations suivantes :
 1. Vérifie les prérequis
 2. Sauvegarde l'environnement existant (si applicable)
 3. Met à jour le code source tout en préservant les modifications locales importantes
@@ -193,247 +195,93 @@ Les correctifs automatiques incluent :
 
 Si vous préférez une approche manuelle, vous pouvez déployer les services étape par étape :
 
-#### 1. Configurer Docker Compose
-
-Le fichier `docker-compose.yml` est situé dans le dossier `docker`. Vérifiez et modifiez les configurations selon vos besoins :
-
 ```bash
-cd /opt/technicia/docker
-```
-
-Vous pouvez modifier des paramètres spécifiques si nécessaire :
-
-```bash
-# Exemple : modifier les limites de mémoire pour Qdrant
-sed -i 's/memory: 4G/memory: 6G/' docker-compose.yml
-```
-
-#### 2. Appliquer les correctifs manuellement
-
-```bash
-# Corriger le Dockerfile frontend
-sed -i 's/RUN npm ci/RUN npm install/' /opt/technicia/frontend/Dockerfile
-
-# Créer la structure minimale pour le frontend
-mkdir -p /opt/technicia/frontend/public
-cat > /opt/technicia/frontend/public/index.html << 'EOF'
-<!DOCTYPE html>
-<html lang="fr">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta
-      name="description"
-      content="TechnicIA - Assistant intelligent de maintenance technique"
-    />
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <title>TechnicIA - Assistant de maintenance</title>
-  </head>
-  <body>
-    <noscript>Vous devez activer JavaScript pour exécuter cette application.</noscript>
-    <div id="root"></div>
-  </body>
-</html>
-EOF
-
-cat > /opt/technicia/frontend/public/manifest.json << 'EOF'
-{
-  "short_name": "TechnicIA",
-  "name": "TechnicIA - Assistant de maintenance technique",
-  "icons": [
-    {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
-    }
-  ],
-  "start_url": ".",
-  "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
-}
-EOF
-```
-
-#### 3. Démarrer les services
-
-```bash
-# Lier le fichier .env dans le répertoire docker
-ln -sf /opt/technicia/.env /opt/technicia/docker/.env
+# Configurer l'environnement
+cp /opt/technicia/.env /opt/technicia/docker/.env
 
 # Construire et démarrer les services
 cd /opt/technicia/docker
 docker compose up -d
 ```
 
-## Configuration de n8n
+## Scripts de configuration automatique
 
-n8n est le moteur d'orchestration central de TechnicIA, responsable de coordonner les workflows entre les différents services. Sa configuration correcte est essentielle pour le bon fonctionnement du système.
+TechnicIA inclut plusieurs scripts de configuration automatique qui facilitent le déploiement et la configuration des différents services :
 
-### Configuration initiale
+### Configuration de n8n
 
-Après le déploiement, accédez à l'interface n8n à l'adresse:
-- http://votre-ip-ou-domaine:5678
-
-Lors de votre première connexion, créez un compte administrateur. Ce compte sera utilisé pour configurer tous les workflows et credentials.
-
-### Configuration des variables d'environnement n8n
-
-Vérifiez que les variables d'environnement dans le docker-compose.yml sont correctement configurées :
+Pour configurer n8n avec votre adresse IP ou nom de domaine:
 
 ```bash
-# Remplacez "your-vps-ip-or-domain" par l'adresse IP de votre serveur ou votre nom de domaine
-sed -i 's/N8N_HOST=your-vps-ip-or-domain/N8N_HOST=votre-ip-ou-domaine/' /opt/technicia/docker/docker-compose.yml
+# Donner les permissions d'exécution au script
+chmod +x /opt/technicia/scripts/configure-n8n.sh
 
-# Si vous utilisez un nom de domaine, configurez également l'URL des webhooks
-sed -i 's/WEBHOOK_TUNNEL_URL=https:\/\/your-domain\/webhook\//WEBHOOK_TUNNEL_URL=https:\/\/votre-domaine.com\/webhook\//' /opt/technicia/docker/docker-compose.yml
+# Configurer n8n avec votre IP ou domaine
+/opt/technicia/scripts/configure-n8n.sh votre-ip-ou-domaine
+
+# Si vous prévoyez d'utiliser HTTPS
+/opt/technicia/scripts/configure-n8n.sh votre-domaine yes
 ```
 
-Puis redémarrez n8n pour appliquer ces changements :
+Le script configure automatiquement:
+- L'hôte n8n dans le docker-compose.yml
+- Le protocole (HTTP ou HTTPS)
+- L'URL des webhooks
+- Et redémarre le conteneur n8n pour appliquer les changements
+
+### Configuration HTTPS
+
+Si vous avez un nom de domaine, vous pouvez configurer HTTPS automatiquement :
 
 ```bash
-docker restart technicia-n8n
+# Donner les permissions d'exécution au script
+chmod +x /opt/technicia/scripts/configure-https.sh
+
+# Configurer HTTPS (Let's Encrypt + Nginx)
+/opt/technicia/scripts/configure-https.sh votre-domaine votre-email@example.com
 ```
 
-### Importation et configuration des workflows
+Le script effectue automatiquement :
+1. Installation de Certbot
+2. Obtention d'un certificat SSL pour votre domaine
+3. Configuration de Nginx comme proxy inverse
+4. Configuration de n8n pour utiliser HTTPS
+5. Configuration du renouvellement automatique des certificats
 
-TechnicIA utilise trois workflows principaux :
-1. **Workflow d'ingestion de documents**: Gère l'upload et le traitement des PDFs
-2. **Workflow de traitement des questions**: Traite les questions et génère des réponses
-3. **Workflow de diagnostic guidé**: Guide l'utilisateur à travers un processus de diagnostic
+### Configuration de Qdrant
 
-Pour une configuration détaillée de ces workflows, consultez le [Guide de Configuration n8n](docs/n8n-config-guide.md) qui fournit des instructions pas à pas pour :
-- Importer les fichiers workflow depuis le répertoire `/opt/technicia/workflows`
-- Configurer les credentials nécessaires pour les services externes
-- Tester et activer les workflows
-- Personnaliser les workflows selon vos besoins
-
-### Configuration HTTPS pour n8n
-
-Pour sécuriser n8n avec HTTPS, vous avez deux options:
-
-1. **Configuration intégrée**:
-   ```bash
-   mkdir -p /opt/technicia/docker/n8n/ssl
-   
-   # Copier les certificats SSL (si vous utilisez Certbot)
-   sudo cp /etc/letsencrypt/live/votre-domaine.com/fullchain.pem /opt/technicia/docker/n8n/ssl/
-   sudo cp /etc/letsencrypt/live/votre-domaine.com/privkey.pem /opt/technicia/docker/n8n/ssl/
-   sudo chown -R $USER:$USER /opt/technicia/docker/n8n/ssl/
-   
-   # Modifier la configuration SSL au docker-compose.yml
-   sed -i '/n8n:/{:a;n;/volumes:/!ba;a\      - ./n8n/ssl:/home/node/.n8n/ssl' /opt/technicia/docker/docker-compose.yml
-   
-   # Ajouter les variables d'environnement SSL
-   sed -i '/N8N_PROTOCOL=https/a\      - N8N_SSL_KEY=/home/node/.n8n/ssl/privkey.pem\n      - N8N_SSL_CERT=/home/node/.n8n/ssl/fullchain.pem' /opt/technicia/docker/docker-compose.yml
-   ```
-
-2. **Utilisation d'un proxy inverse** (recommandé pour les environnements de production):
-   - Utilisez Nginx comme proxy inverse pour n8n
-   - Cette configuration est déjà incluse dans le service frontend du docker-compose.yml
-
-## Configuration de Qdrant
-
-Qdrant est la base de données vectorielle utilisée par TechnicIA pour stocker et rechercher des embeddings.
-
-### Vérification de Qdrant
-
-Vérifiez que Qdrant est correctement configuré et accessible:
+Pour initialiser et configurer la base de données vectorielle Qdrant :
 
 ```bash
-# Tester l'accès à l'API Qdrant
-curl http://localhost:6333/collections
+# Donner les permissions d'exécution au script
+chmod +x /opt/technicia/scripts/setup-qdrant.sh
 
-# Vérifier si la collection technicia existe
-curl http://localhost:6333/collections/technicia
+# Initialiser Qdrant avec la collection par défaut
+/opt/technicia/scripts/setup-qdrant.sh
+
+# Ou avec un nom de collection personnalisé
+/opt/technicia/scripts/setup-qdrant.sh nom-collection-personnalisee
 ```
 
-## Configuration HTTPS
+Le script :
+1. Vérifie si Qdrant est en cours d'exécution
+2. Crée la collection si elle n'existe pas déjà
+3. Configure les index nécessaires pour les métadonnées
+4. Vérifie l'accessibilité de l'API Qdrant
 
-### Configuration avec Certbot (Let's Encrypt)
+### Configuration des workflows
 
-Si vous avez un nom de domaine, configurez HTTPS avec Let's Encrypt :
+Pour configurer les workflows n8n (importation et configuration des credentials) :
 
 ```bash
-# Installer Certbot
-sudo apt install -y certbot python3-certbot-nginx
+# Donner les permissions d'exécution au script
+chmod +x /opt/technicia/scripts/setup-workflows.sh
 
-# Obtenir un certificat SSL
-sudo certbot --nginx -d votre-domaine.com
-
-# Alternative: obtenir un certificat en mode standalone
-sudo certbot certonly --standalone -d votre-domaine.com
+# Lancer le script avec l'URL de n8n
+/opt/technicia/scripts/setup-workflows.sh http://votre-ip:5678
 ```
 
-### Configuration manuelle de Nginx
-
-Si vous préférez configurer Nginx manuellement:
-
-```bash
-# Créer les répertoires pour NGINX
-mkdir -p /opt/technicia/docker/nginx/{conf.d,ssl,www}
-
-# Créer le fichier de configuration
-cat > /opt/technicia/docker/nginx/conf.d/default.conf << 'EOF'
-server {
-    listen 80;
-    server_name _;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name _;
-
-    ssl_certificate /etc/nginx/ssl/fullchain.pem;
-    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers off;
-
-    # n8n
-    location / {
-        proxy_pass http://n8n:5678;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Document Processor Service
-    location /api/document-processor/ {
-        proxy_pass http://document-processor:8000/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Vision Classifier Service
-    location /api/vision-classifier/ {
-        proxy_pass http://vision-classifier:8000/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Vector Store Service
-    location /api/vector-store/ {
-        proxy_pass http://vector-store:8000/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-EOF
-
-# Copier les certificats SSL
-sudo cp /etc/letsencrypt/live/votre-domaine.com/fullchain.pem /opt/technicia/docker/nginx/ssl/
-sudo cp /etc/letsencrypt/live/votre-domaine.com/privkey.pem /opt/technicia/docker/nginx/ssl/
-sudo chown $USER:$USER /opt/technicia/docker/nginx/ssl/*.pem
-```
+**Note**: Actuellement ce script fournit des instructions pour l'importation manuelle des workflows. L'importation automatique sera disponible dans une version future.
 
 ## Vérification
 
@@ -567,7 +415,7 @@ docker compose up -d
 
 ### Problèmes connus et solutions
 
-Le script `deploy.sh` inclut désormais des correctifs automatiques pour les problèmes connus suivants :
+Le script `deploy.sh` inclut des correctifs automatiques pour les problèmes connus suivants :
 
 1. **Problème avec le Dockerfile du frontend**
    - **Symptôme** : Erreur `npm ERR! Couldn't find npm-shrinkwrap.json or package-lock.json` lors de la construction
@@ -631,11 +479,24 @@ docker compose down
 docker compose up -d
 ```
 
+## Résumé des scripts disponibles
+
+TechnicIA inclut plusieurs scripts pour faciliter le déploiement et la configuration :
+
+| Script | Description | Utilisation |
+|--------|-------------|-------------|
+| `deploy.sh` | Script principal de déploiement | `/opt/technicia/scripts/deploy.sh` |
+| `configure-n8n.sh` | Configuration de n8n | `/opt/technicia/scripts/configure-n8n.sh votre-ip-ou-domaine [use-https]` |
+| `configure-https.sh` | Configuration HTTPS | `/opt/technicia/scripts/configure-https.sh votre-domaine [email]` |
+| `setup-qdrant.sh` | Initialisation de Qdrant | `/opt/technicia/scripts/setup-qdrant.sh [nom-collection]` |
+| `setup-workflows.sh` | Configuration des workflows n8n | `/opt/technicia/scripts/setup-workflows.sh [n8n-url]` |
+| `monitor.sh` | Surveillance des services | `/opt/technicia/scripts/monitor.sh --check` |
+
 ## Conclusion
 
-En suivant ce guide, vous devriez avoir un déploiement fonctionnel du MVP de TechnicIA sur votre serveur VPS. Le script de déploiement amélioré applique automatiquement les correctifs nécessaires pour éviter les problèmes connus, ce qui simplifie grandement le processus d'installation.
+En suivant ce guide, vous devriez avoir un déploiement fonctionnel du MVP de TechnicIA sur votre serveur VPS. Les scripts automatisés simplifient considérablement le processus de déploiement et de configuration.
 
-Pour une configuration approfondie de n8n, consultez le [Guide de Configuration n8n](docs/n8n-config-guide.md) dédié qui fournit des instructions détaillées sur l'importation des workflows, la configuration des credentials et la personnalisation du système.
+Pour une documentation détaillée sur la configuration de n8n, consultez le [Guide de Configuration n8n](docs/n8n-config-guide.md) dédié.
 
 Si vous rencontrez des problèmes, consultez les fichiers de documentation spécifiques ou contactez l'équipe de support.
 
