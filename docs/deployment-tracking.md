@@ -14,7 +14,7 @@ Pour chaque étape de déploiement, indiquez :
 ## État Global du Déploiement
 
 **Date de dernière mise à jour :** 24 mars 2025  
-**État global :** Planifié  
+**État global :** En préparation  
 **Environnement en cours :** N/A  
 **Prochaine étape :** Déploiement sur environnement de test
 
@@ -64,12 +64,19 @@ Pour chaque étape de déploiement, indiquez :
 | - Clonage du repository | Non commencé | - | - | - | - |
 | - Configuration des clés API | Non commencé | - | - | - | - |
 | - Exécution du script de déploiement | Non commencé | - | - | - | - |
+| **Configuration de n8n** | Non commencé | - | - | - | - |
+| - Génération clé de chiffrement | Non commencé | - | - | - | - |
+| - Configuration variables d'environnement | Non commencé | - | - | - | - |
+| - Configuration HTTPS pour n8n | Non commencé | - | - | - | - |
+| - Import des workflows | Non commencé | - | - | - | - |
+| - Configuration des credentials | Non commencé | - | - | - | - |
 | **Configuration HTTPS** | Non commencé | - | - | - | - |
 | - Configuration DNS | Non commencé | - | - | - | - |
 | - Installation Certbot | Non commencé | - | - | - | - |
 | - Obtention certificats SSL | Non commencé | - | - | - | - |
 | **Tests post-déploiement** | Non commencé | - | - | - | - |
 | - Tests fonctionnels | Non commencé | - | - | - | - |
+| - Tests des workflows n8n | Non commencé | - | - | - | - |
 | - Tests de performance | Non commencé | - | - | - | - |
 | - Tests de sécurité | Non commencé | - | - | - | - |
 | **Configuration monitoring** | Non commencé | - | - | - | - |
@@ -83,6 +90,7 @@ Pour chaque étape de déploiement, indiquez :
 |-------|--------|------------|----------|-------------|--------------|
 | **Préparation du serveur** | Non commencé | - | - | - | - |
 | **Déploiement des services** | Non commencé | - | - | - | - |
+| **Configuration de n8n** | Non commencé | - | - | - | - |
 | **Configuration HTTPS** | Non commencé | - | - | - | - |
 | **Tests post-déploiement** | Non commencé | - | - | - | - |
 | **Configuration monitoring** | Non commencé | - | - | - | - |
@@ -93,6 +101,7 @@ Pour chaque étape de déploiement, indiquez :
 |-------|--------|------------|----------|-------------|--------------|
 | **Préparation du serveur** | Non commencé | - | - | - | - |
 | **Déploiement des services** | Non commencé | - | - | - | - |
+| **Configuration de n8n** | Non commencé | - | - | - | - |
 | **Configuration HTTPS** | Non commencé | - | - | - | - |
 | **Tests post-déploiement** | Non commencé | - | - | - | - |
 | **Configuration monitoring** | Non commencé | - | - | - | - |
@@ -113,6 +122,9 @@ Pour chaque étape de déploiement, indiquez :
 | Anthropic (Claude) | Test | Non configuré | - |
 | Anthropic (Claude) | Staging | Non configuré | - |
 | Anthropic (Claude) | Production | Non configuré | - |
+| n8n Encryption Key | Test | Non configuré | Clé nécessaire pour le chiffrement des credentials n8n |
+| n8n Encryption Key | Staging | Non configuré | Clé nécessaire pour le chiffrement des credentials n8n |
+| n8n Encryption Key | Production | Non configuré | Clé nécessaire pour le chiffrement des credentials n8n |
 
 ## Problèmes Rencontrés
 
@@ -134,3 +146,6 @@ Pour chaque étape de déploiement, indiquez :
 - La configuration DNS doit être effectuée au moins 24h avant le déploiement pour permettre la propagation
 - Un monitoring des coûts des services cloud doit être mis en place après le déploiement en production
 - La documentation utilisateur doit être finalisée avant le déploiement en production
+- Les workflows n8n doivent être testés individuellement pour s'assurer de leur bon fonctionnement
+- La clé de chiffrement n8n doit être sécurisée et sauvegardée - sa perte rendrait les credentials irrécupérables
+- Les certificats SSL pour n8n doivent être renouvelés en même temps que ceux du frontend
