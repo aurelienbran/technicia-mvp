@@ -46,7 +46,7 @@ check_prerequisites() {
   if ! command -v git &> /dev/null; then
     error "Git n'est pas installé. Veuillez installer Git."
     exit 1
-  }
+  fi
   
   log "Tous les prérequis sont satisfaits."
 }
