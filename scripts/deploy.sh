@@ -14,6 +14,13 @@ BACKUP_DIR="/opt/technicia-backups"
 ENV_FILE=".env"
 DATE_TAG=$(date +%Y%m%d%H%M%S)
 
+# Vérifier et créer le répertoire de sauvegarde avec les bonnes permissions
+if [ ! -d "$BACKUP_DIR" ]; then
+  echo "Création du répertoire de sauvegarde avec sudo..."
+  sudo mkdir -p "$BACKUP_DIR"
+  sudo chown $(whoami):$(whoami) "$BACKUP_DIR"
+fi
+
 # Fonction pour afficher les logs
 log() {
   echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] $1${NC}"
@@ -145,6 +152,27 @@ start_services() {
   log "Démarrage des services..."
   
   cd "$DEPLOY_DIR/docker"
+  
+  # Vérifier si le frontend utilise npm ci sans package-lock.json
+  if [ -d "$DEPLOY_DIR/docker/frontend" ] && [ -f "$DEPLOY_DIR/docker/frontend/Dockerfile" ]; then
+    if grep -q "npm ci" "$DEPLOY_DIR/docker/frontend/Dockerfile" && [ ! -f "$DEPLOY_DIR/docker/frontend/package-lock.json" ]; then
+      log "Correction du Dockerfile du frontend pour utiliser npm install au lieu de npm ci"
+      sed -i 's/npm ci/npm install/g' "$DEPLOY_DIR/docker/frontend/Dockerfile"
+    fi
+  fi
+  
+  # Vérifier que les variables d'environnement sont bien chargées
+  if [ -f "$DEPLOY_DIR/$ENV_FILE" ]; then
+    # Charger les variables d'environnement explicitement
+    export $(grep -v '^#' "$DEPLOY_DIR/$ENV_FILE" | xargs)
+    
+    # Vérifier quelques variables clés
+    if [ -z "$N8N_ENCRYPTION_KEY" ]; then
+      warn "N8N_ENCRYPTION_KEY n'est pas définie dans le fichier .env"
+    else
+      log "Variables d'environnement chargées avec succès"
+    fi
+  fi
   
   # Construire les images
   docker-compose build || { error "Échec de la construction des images Docker"; exit 1; }
