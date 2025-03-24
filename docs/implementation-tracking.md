@@ -11,8 +11,8 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 ## État Global du Projet
 
 **Date de dernière mise à jour :** 24 mars 2025  
-**État global :** En progression - Phase 1 complétée  
-**Prochaine milestone :** Développement des workflows n8n
+**État global :** En progression - Phase 1 complétée, Phase 2 en cours  
+**Prochaine milestone :** Finalisation des workflows n8n (questions et diagnostic)
 
 ## Suivi des Phases d'Implémentation
 
@@ -34,13 +34,13 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 
 | Tâche | Statut | Date début | Date fin | Commentaires |
 |-------|--------|------------|----------|--------------|
-| **2.1 Configuration n8n** | Non commencé | - | - | - |
-| - Credentials | Non commencé | - | - | - |
-| - Variables d'environnement | Non commencé | - | - | - |
-| **2.2 Workflow d'ingestion** | Non commencé | - | - | - |
-| - Webhook de réception | Non commencé | - | - | - |
-| - Orchestration des services | Non commencé | - | - | - |
-| - Gestion des erreurs | Non commencé | - | - | - |
+| **2.1 Configuration n8n** | En cours | 24/03/2025 | - | Préparation de l'environnement |
+| - Credentials | En cours | 24/03/2025 | - | À configurer lors du déploiement |
+| - Variables d'environnement | En cours | 24/03/2025 | - | À définir dans .env |
+| **2.2 Workflow d'ingestion** | Complété | 24/03/2025 | 24/03/2025 | Workflow JSON exporté |
+| - Webhook de réception | Complété | 24/03/2025 | 24/03/2025 | Point d'entrée pour upload |
+| - Orchestration des services | Complété | 24/03/2025 | 24/03/2025 | Appels aux microservices |
+| - Gestion des erreurs | Complété | 24/03/2025 | 24/03/2025 | Validation et gestion des erreurs |
 | **2.3 Workflow de questions** | Non commencé | - | - | - |
 | - Réception et formatage | Non commencé | - | - | - |
 | - Construction du contexte | Non commencé | - | - | - |
@@ -95,6 +95,7 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 |------|-------------|---------------|--------------------------|
 | 24/03/2025 | Utilisation de VoyageAI pour les embeddings | Meilleure qualité vectorielle pour le contenu technique | OpenAI Ada-002, SentenceTransformers |
 | 24/03/2025 | Ajout d'un service d'initialisation séparé pour Qdrant | Garantit la création de la collection avant démarrage des autres services | Initialisation dans chaque service |
+| 24/03/2025 | Workflow d'ingestion avec gestion asynchrone | Permet de traiter des documents volumineux sans bloquer le workflow | Traitement synchrone avec timeout étendu |
 
 ## Déploiements
 
@@ -107,7 +108,7 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 | Métrique | Valeur actuelle | Objectif | Dernière mise à jour |
 |----------|-----------------|----------|---------------------|
 | % Composants implémentés | 30% | 100% | 24/03/2025 |
-| % Workflows n8n | 0% | 100% | 24/03/2025 |
+| % Workflows n8n | 33% | 100% | 24/03/2025 |
 | % Tests fonctionnels | 0% | 100% | 24/03/2025 |
 | % Documentation | 40% | 100% | 24/03/2025 |
 
@@ -117,3 +118,4 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 - La configuration initiale de n8n peut nécessiter des ajustements spécifiques à l'environnement de déploiement
 - Tous les microservices doivent exposer un endpoint /health pour la surveillance
 - Le service vector-store nécessite une clé API VoyageAI valide configurée via la variable d'environnement VOYAGE_API_KEY
+- Le workflow d'ingestion nécessite une configuration correcte des webhooks dans n8n
