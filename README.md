@@ -46,7 +46,9 @@ technicia-mvp/
 ├── README.md                   # Ce fichier
 ├── docs/                       # Documentation
 │   ├── architecture.md         # Architecture détaillée
-│   ├── deployment.md           # Guide de déploiement
+│   ├── technicia-deployment-guide.md  # Guide complet de déploiement
+│   ├── deployment-tracking.md  # Suivi du déploiement
+│   ├── deployment-issues.md    # Suivi des problèmes
 │   └── workflows.md            # Description des workflows n8n
 ├── docker/                     # Configuration Docker
 │   ├── docker-compose.yml      # Configuration pour tous les services
@@ -56,6 +58,9 @@ technicia-mvp/
 │   ├── document-processor/     # Service de traitement des documents
 │   ├── vision-classifier/      # Service de classification des schémas
 │   └── vector-store/           # Service d'interface avec Qdrant
+├── scripts/                    # Scripts utilitaires
+│   ├── deploy.sh               # Script de déploiement automatisé
+│   └── monitor.sh              # Script de surveillance
 └── workflows/                  # Workflows n8n (JSON)
     ├── ingestion.json          # Workflow d'ingestion de documents
     ├── question.json           # Workflow de traitement des questions
@@ -118,7 +123,7 @@ Trois workflows principaux :
 
 ### 4. Déploiement
 
-Le déploiement utilisera Docker et Docker Compose pour l'ensemble des services. Consultez le fichier [deployment.md](docs/deployment.md) pour les instructions détaillées.
+Le déploiement utilisera Docker et Docker Compose pour l'ensemble des services. Consultez le [Guide Complet de Déploiement](docs/technicia-deployment-guide.md) pour les instructions détaillées.
 
 ## Prérequis
 
@@ -129,7 +134,17 @@ Le déploiement utilisera Docker et Docker Compose pour l'ensemble des services.
 
 ## Installation et Configuration
 
-Consultez le [Guide de Déploiement](docs/deployment.md) pour les instructions complètes.
+Consultez le [Guide Complet de Déploiement](docs/technicia-deployment-guide.md) pour les instructions d'installation et de configuration.
+
+## Monitoring et Maintenance
+
+Le projet inclut des scripts de surveillance pour s'assurer du bon fonctionnement des services. 
+Consultez la section [Monitoring](docs/technicia-deployment-guide.md#monitoring) du guide de déploiement.
+
+## Dépannage
+
+En cas de problème, consultez la section [Dépannage](docs/technicia-deployment-guide.md#dépannage) du guide de déploiement 
+ou référez-vous au fichier [deployment-issues.md](docs/deployment-issues.md) pour les problèmes connus et leurs solutions.
 
 ## Licence
 
