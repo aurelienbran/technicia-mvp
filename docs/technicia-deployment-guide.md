@@ -269,11 +269,18 @@ docker compose up -d
 
 ## Configuration de n8n
 
-n8n est le moteur d'orchestration central de TechnicIA, responsable de coordonner les workflows entre les différents services.
+n8n est le moteur d'orchestration central de TechnicIA, responsable de coordonner les workflows entre les différents services. Sa configuration correcte est essentielle pour le bon fonctionnement du système.
+
+### Configuration initiale
+
+Après le déploiement, accédez à l'interface n8n à l'adresse:
+- http://votre-ip-ou-domaine:5678
+
+Lors de votre première connexion, créez un compte administrateur. Ce compte sera utilisé pour configurer tous les workflows et credentials.
 
 ### Configuration des variables d'environnement n8n
 
-Modifiez le fichier `/opt/technicia/docker/docker-compose.yml` pour ajuster les variables d'environnement de n8n:
+Vérifiez que les variables d'environnement dans le docker-compose.yml sont correctement configurées :
 
 ```bash
 # Remplacez "your-vps-ip-or-domain" par l'adresse IP de votre serveur ou votre nom de domaine
@@ -282,6 +289,25 @@ sed -i 's/N8N_HOST=your-vps-ip-or-domain/N8N_HOST=votre-ip-ou-domaine/' /opt/tec
 # Si vous utilisez un nom de domaine, configurez également l'URL des webhooks
 sed -i 's/WEBHOOK_TUNNEL_URL=https:\/\/your-domain\/webhook\//WEBHOOK_TUNNEL_URL=https:\/\/votre-domaine.com\/webhook\//' /opt/technicia/docker/docker-compose.yml
 ```
+
+Puis redémarrez n8n pour appliquer ces changements :
+
+```bash
+docker restart technicia-n8n
+```
+
+### Importation et configuration des workflows
+
+TechnicIA utilise trois workflows principaux :
+1. **Workflow d'ingestion de documents**: Gère l'upload et le traitement des PDFs
+2. **Workflow de traitement des questions**: Traite les questions et génère des réponses
+3. **Workflow de diagnostic guidé**: Guide l'utilisateur à travers un processus de diagnostic
+
+Pour une configuration détaillée de ces workflows, consultez le [Guide de Configuration n8n](docs/n8n-config-guide.md) qui fournit des instructions pas à pas pour :
+- Importer les fichiers workflow depuis le répertoire `/opt/technicia/workflows`
+- Configurer les credentials nécessaires pour les services externes
+- Tester et activer les workflows
+- Personnaliser les workflows selon vos besoins
 
 ### Configuration HTTPS pour n8n
 
@@ -306,55 +332,6 @@ Pour sécuriser n8n avec HTTPS, vous avez deux options:
 2. **Utilisation d'un proxy inverse** (recommandé pour les environnements de production):
    - Utilisez Nginx comme proxy inverse pour n8n
    - Cette configuration est déjà incluse dans le service frontend du docker-compose.yml
-
-### Importation des workflows TechnicIA
-
-TechnicIA utilise plusieurs workflows n8n prédéfinis pour ses fonctionnalités:
-
-1. **Workflow d'ingestion de documents**: Traite les PDF téléchargés avec Document AI et Vision AI
-2. **Workflow de traitement des questions**: Gère les questions des utilisateurs et récupère les informations pertinentes
-3. **Workflow de diagnostic guidé**: Pilote le processus de diagnostic pas à pas
-
-Pour importer ces workflows:
-1. Accédez à l'interface n8n: http://votre-ip-ou-domaine:5678
-2. Créez un compte administrateur lors de la première connexion
-3. Cliquez sur "Workflows" dans le menu de gauche
-4. Cliquez sur "Import from File"
-5. Sélectionnez les fichiers de workflow (*.json) depuis le répertoire `/opt/technicia/workflows`
-6. Activez chaque workflow importé en cliquant sur le bouton "Active" dans l'interface
-
-### Configuration des credentials dans n8n
-
-Pour que les workflows fonctionnent correctement, vous devez configurer les credentials pour les services externes:
-
-1. Dans l'interface n8n, cliquez sur "Credentials" dans le menu de gauche
-2. Ajoutez les credentials suivants:
-
-   a. **Google Cloud Service Account**:
-   - Nom: `google-cloud`
-   - Upload du fichier JSON: `/opt/technicia/docker/credentials/google-credentials.json`
-
-   b. **Anthropic API**:
-   - Nom: `anthropic-api`
-   - API Key: Votre clé API Anthropic (pour Claude 3.5)
-
-   c. **Voyage AI**:
-   - Nom: `voyage-api`
-   - API Key: La même clé que dans votre fichier `.env` pour `VOYAGE_API_KEY`
-
-   d. **HTTP Basic Auth** (pour les microservices):
-   - Nom: `techncia-services`
-   - User: `admin` (ou celui configuré dans vos microservices)
-   - Password: `password` (ou celui configuré dans vos microservices)
-
-### Test des workflows n8n
-
-Après avoir importé et configuré les workflows, testez-les individuellement:
-
-1. Ouvrez chaque workflow dans l'interface n8n
-2. Cliquez sur "Execute Workflow" pour exécuter manuellement le workflow
-3. Vérifiez les logs d'exécution pour vous assurer que chaque étape s'exécute correctement
-4. Pour le workflow d'ingestion, testez avec un petit PDF d'exemple
 
 ## Configuration de Qdrant
 
@@ -620,55 +597,9 @@ Si vous rencontrez des problèmes de connexion aux services Google Cloud, Anthro
 
 3. Vérifiez les quotas et les restrictions d'accès sur les services externes
 
-### Problèmes de démarrage des conteneurs
-
-Si certains conteneurs ne démarrent pas :
-
-1. Vérifiez les logs du conteneur :
-   ```bash
-   docker logs <nom-du-conteneur>
-   ```
-
-2. Vérifiez que les ports ne sont pas utilisés par d'autres services :
-   ```bash
-   sudo netstat -tulpn | grep <numéro-de-port>
-   ```
-
-3. Reconstruisez et redémarrez les services :
-   ```bash
-   cd /opt/technicia/docker
-   docker compose down
-   docker compose up -d --build
-   ```
-
 ### Problèmes spécifiques à n8n
 
-Si vous rencontrez des problèmes avec n8n:
-
-1. **Workflows non déclenchés**:
-   - Vérifiez que les webhooks sont correctement configurés
-   - Assurez-vous que les workflows sont activés
-   - Vérifiez les logs pour les erreurs d'exécution
-
-2. **Erreurs de connexion aux services**:
-   - Vérifiez les credentials dans n8n
-   - Assurez-vous que les services sont accessibles depuis le conteneur n8n
-
-3. **Problèmes de performance**:
-   - Augmentez les ressources allouées au conteneur n8n dans le docker-compose.yml
-   - Vérifiez la charge système sur le serveur
-
-4. **Perte de données**:
-   - Vérifiez que le volume de données n8n est correctement monté
-   - Restaurez à partir d'une sauvegarde si nécessaire
-
-```bash
-# Vérifier l'état du volume n8n
-ls -la /opt/technicia/docker/n8n/data
-
-# Redémarrer n8n en cas de problème
-docker restart technicia-n8n
-```
+Si vous rencontrez des problèmes avec n8n (workflows non déclenchés, erreurs d'API, etc.), consultez la section [Dépannage du guide de configuration n8n](docs/n8n-config-guide.md#dépannage) pour des solutions détaillées.
 
 ## Mise à jour
 
@@ -704,6 +635,8 @@ docker compose up -d
 
 En suivant ce guide, vous devriez avoir un déploiement fonctionnel du MVP de TechnicIA sur votre serveur VPS. Le script de déploiement amélioré applique automatiquement les correctifs nécessaires pour éviter les problèmes connus, ce qui simplifie grandement le processus d'installation.
 
-Si vous rencontrez des problèmes ou avez besoin d'assistance supplémentaire, consultez le fichier `docs/deployment-issues.md` pour les problèmes connus et leurs solutions, ou contactez l'équipe de support.
+Pour une configuration approfondie de n8n, consultez le [Guide de Configuration n8n](docs/n8n-config-guide.md) dédié qui fournit des instructions détaillées sur l'importation des workflows, la configuration des credentials et la personnalisation du système.
+
+Si vous rencontrez des problèmes, consultez les fichiers de documentation spécifiques ou contactez l'équipe de support.
 
 Assurez-vous de surveiller régulièrement les performances et l'état des services, et de mettre à jour le système lorsque de nouvelles versions sont disponibles. Effectuez également des sauvegardes périodiques pour éviter toute perte de données.
