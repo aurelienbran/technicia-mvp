@@ -1,0 +1,202 @@
+{
+  "name": "Question Processing Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "question",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Question Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "question-processing"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate and extract the question\nconst receivedData = $input.item.json;\n\nif (!receivedData.question) {\n  return {\n    error: 'No question received',\n    status: 400\n  };\n}\n\n// Extract additional parameters if provided\nconst question = receivedData.question;\nconst limit = receivedData.limit || 10; // Default to 10 relevant chunks\nconst filters = receivedData.filters || {};\nconst userId = receivedData.userId || 'anonymous';\n\nreturn {\n  question,\n  limit,\n  filters,\n  userId,\n  timestamp: new Date().toISOString(),\n  sessionId: receivedData.sessionId || `session_${Date.now()}`\n};"
+      },
+      "name": "Validate & Extract Question",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://vector-store:8000/search",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"{{$json.question}}\",\n  \"limit\": {{$json.limit}},\n  \"filter\": {{$json.filters}}\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "name": "Search Vector DB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fonction pour échapper les caractères markdown\nfunction escapeMarkdown(text) {\n  if (typeof text !== 'string') return '';\n  \n  // Échapper les caractères spéciaux markdown\n  return text\n    .replace(/\\*/g, '\\\\*')\n    .replace(/\\_/g, '\\\\_')\n    .replace(/\\#/g, '\\\\#')\n    .replace(/\\~/g, '\\\\~')\n    .replace(/\\`/g, '\\\\`');\n}\n\n// Récupérer les résultats de la recherche\nconst searchResults = $input.item.json.results || [];\nconst searchQuery = $input.item.json.query || '';\n\n// Extraire le texte et les images des résultats\nlet context = '';\nconst images = [];\nconst sources = [];\n\n// Collecter le contexte textuel\nfor (const result of searchResults) {\n  const metadata = result.metadata || {};\n  \n  if (metadata.type === 'text' && metadata.text) {\n    // Ajouter le texte au contexte avec la référence de la page\n    context += `\\n\\nEXTRAIT (page ${metadata.page_number || 'N/A'}):\\n${metadata.text}`;\n    \n    // Ajouter la source si elle n'est pas déjà incluse\n    if (metadata.document_name && !sources.includes(metadata.document_name)) {\n      sources.push(metadata.document_name);\n    }\n  } else if (metadata.type === 'image') {\n    // Collecter les informations sur l'image\n    images.push({\n      url: metadata.image_url,\n      page: metadata.page_number,\n      type: metadata.schema_type || 'schéma technique',\n      detected_text: metadata.detected_text || '',\n      document: metadata.document_name\n    });\n  }\n}\n\n// Construire la liste des sources\nlet sourcesText = '';\nif (sources.length > 0) {\n  sourcesText = '\\n\\nSOURCES:\\n' + sources.map(s => `- ${s}`).join('\\n');\n}\n\n// Construire la liste des images pour les inclure dans le contexte\nlet imagesText = '';\nif (images.length > 0) {\n  imagesText = '\\n\\nSCHÉMAS PERTINENTS:\\n';\n  for (let i = 0; i < images.length; i++) {\n    const img = images[i];\n    imagesText += `\\n[SCHÉMA ${i+1}] ${img.type}, page ${img.page}, document: ${img.document}\\n`;\n    if (img.detected_text) {\n      imagesText += `Texte détecté: ${img.detected_text}\\n`;\n    }\n  }\n}\n\n// Construire le contexte final pour Claude\nconst finalContext = `CONTEXTE:\\n${context}${imagesText}${sourcesText}`;\n\n// Créer le système prompt\nconst systemPrompt = `Tu es TechnicIA, un assistant de maintenance technique spécialisé dans l'analyse de documentation technique industrielle. Tu dois répondre aux questions en te basant uniquement sur le contexte fourni, qui contient des extraits de documentation et des références à des schémas techniques.\\n\\nInstructions spécifiques:\\n- Utilise uniquement les informations dans le CONTEXTE fourni\\n- Si le contexte ne contient pas l'information demandée, indique-le clairement\\n- Cite les numéros de page des sources quand c'est pertinent\\n- Quand tu mentionnes un schéma, réfère-toi au numéro du SCHÉMA ([SCHÉMA X])\\n- Présente les informations techniques de manière claire et précise\\n- Adapte ton niveau de détail technique à la question posée`;\n\n// Construire la question pour Claude\nconst questionForClaude = `${searchQuery}\\n\\nRéponds en français.`;\n\nreturn {\n  systemPrompt: systemPrompt,\n  context: finalContext,\n  question: questionForClaude,\n  originalQuestion: searchQuery,\n  sourcesCount: sources.length,\n  imagesCount: images.length,\n  images: images\n};"
+      },
+      "name": "Prepare Context & Prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        940,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "claude-3-5-sonnet-20240620"
+            },
+            {
+              "name": "max_tokens",
+              "value": "4000"
+            },
+            {
+              "name": "temperature",
+              "value": "0.2"
+            },
+            {
+              "name": "system",
+              "value": "={{ $json.systemPrompt }}"
+            },
+            {
+              "name": "messages",
+              "value": "=[\n  {\n    \"role\": \"user\",\n    \"content\": \"{{ $json.context }}\\n\\nQUESTION:\\n{{ $json.question }}\"\n  }\n]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Call Claude API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1180,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Claude API Authentication"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraire la réponse de Claude\nconst claudeResponse = $input.item.json;\nlet answer = '';\n\ntry {\n  // Extraire la réponse du message\n  if (claudeResponse && claudeResponse.content && claudeResponse.content.length > 0) {\n    answer = claudeResponse.content[0].text;\n  } else if (claudeResponse && claudeResponse.content) {\n    // Compatibilité avec différentes versions de l'API Claude\n    answer = claudeResponse.content;\n  } else {\n    throw new Error('Format de réponse Claude inattendu');\n  }\n  \n  // Récupérer les données précédentes\n  const originalQuestion = $('Prepare Context & Prompts').item.json.originalQuestion;\n  const images = $('Prepare Context & Prompts').item.json.images || [];\n  \n  // Préparer les URLs d'images à inclure dans la réponse\n  const imageUrls = images.map(img => img.url);\n  \n  return {\n    answer,\n    question: originalQuestion,\n    images: imageUrls,\n    timestamp: new Date().toISOString()\n  };\n  \n} catch (error) {\n  // En cas d'erreur, renvoyer un message d'erreur\n  return {\n    answer: \"Je suis désolé, j'ai rencontré une difficulté pour traiter votre question. Pourriez-vous la reformuler ou essayer à nouveau plus tard?\",\n    error: error.message,\n    question: $('Prepare Context & Prompts').item.json.originalQuestion || 'Question inconnue',\n    images: [],\n    timestamp: new Date().toISOString()\n  };\n}"
+      },
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Return Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1660,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Question Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & Extract Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Extract Question": {
+      "main": [
+        [
+          {
+            "node": "Search Vector DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Vector DB": {
+      "main": [
+        [
+          {
+            "node": "Prepare Context & Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Context & Prompts": {
+      "main": [
+        [
+          {
+            "node": "Call Claude API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Claude API": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Return Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
