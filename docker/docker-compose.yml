@@ -120,6 +120,29 @@ services:
       - qdrant-init
     networks:
       - technicia-network
+      
+  # Frontend Service
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: technicia-frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../frontend:/app
+      - ./ssl:/etc/nginx/ssl
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - n8n
+      - document-processor
+      - vision-classifier
+      - vector-store
+    restart: always
+    networks:
+      - technicia-network
 
 networks:
   technicia-network:
