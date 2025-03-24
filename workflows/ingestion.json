@@ -1,0 +1,408 @@
+{
+  "name": "Document Ingestion Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "upload",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Document Upload Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "document-upload"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate received file\nconst fileData = $input.item.json.files.file;\n\nif (!fileData) {\n  return {\n    error: 'No file received',\n    status: 400\n  };\n}\n\nif (!fileData.mimeType.includes('pdf')) {\n  return {\n    error: 'Only PDF files are supported',\n    status: 400\n  };\n}\n\n// Get file metadata\nconst fileName = fileData.originalname || 'document.pdf';\nconst fileSize = fileData.size;\nconst filePath = fileData.path;\n\n// Define processing approach based on file size\nconst isLargeFile = fileSize > 15 * 1024 * 1024; // 15MB threshold\n\nreturn {\n  fileName,\n  fileSize,\n  filePath,\n  isLargeFile,\n  originalFile: fileData,\n  uploadTime: new Date().toISOString(),\n  taskId: $node.context.instanceId.replace('n8n_', '')\n};"
+      },
+      "name": "Validate & Prepare File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.isLargeFile }}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "name": "Large File?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://document-processor:8000/process-large-file",
+        "method": "POST",
+        "sendBinaryData": true,
+        "binaryPropertyName": "=file",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "name": "Process Large File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fields": {
+          "values": [
+            {
+              "name": "document_path",
+              "stringValue": "={{ $json.filePath }}"
+            },
+            {
+              "name": "document_name",
+              "stringValue": "={{ $json.fileName }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Prepare Document Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        900,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://document-processor:8000/task/{{ $json.task_id }}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "name": "Check Processing Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1140,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "name": "Wait 3 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        40
+      ],
+      "webhookId": "wait-for-processing"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "notEqual",
+              "value2": "completed"
+            }
+          ]
+        }
+      },
+      "name": "Still Processing?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1380,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://vision-classifier:8000/classify-base64",
+        "method": "POST",
+        "sendQuery": true,
+        "queryParameters": {},
+        "options": {
+          "allowUnauthorizedCerts": true
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { image: $json.image_data } }}"
+      },
+      "name": "Classify Extracted Images",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1620,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "mergeByPosition",
+        "value": "item",
+        "options": {}
+      },
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process results from Document AI and Vision AI\nconst docResults = $input.item.json.document_data || {};\nconst visionResults = $input.item.json.vision_data || [];\n\n// Extract text chunks (simplified example)\nconst textChunks = [];\nif (docResults.pages) {\n  for (const page of docResults.pages) {\n    // Group paragraphs into logical chunks\n    let currentChunk = [];\n    let currentChunkLength = 0;\n    \n    for (const paragraph of page.paragraphs || []) {\n      currentChunk.push(paragraph.text);\n      currentChunkLength += paragraph.text.length;\n      \n      // When chunk gets large enough, save it and start a new one\n      if (currentChunkLength > 500) {\n        textChunks.push({\n          text: currentChunk.join(' '),\n          page_number: page.page_number,\n          type: 'text'\n        });\n        currentChunk = [];\n        currentChunkLength = 0;\n      }\n    }\n    \n    // Add any remaining text\n    if (currentChunk.length > 0) {\n      textChunks.push({\n        text: currentChunk.join(' '),\n        page_number: page.page_number,\n        type: 'text'\n      });\n    }\n  }\n}\n\n// Process classified images\nconst images = [];\nfor (const imageResult of visionResults) {\n  if (imageResult.is_technical_diagram) {\n    images.push({\n      image_url: imageResult.image_url,\n      schema_type: imageResult.schema_type,\n      page_number: imageResult.page_number || 1,\n      detected_text: imageResult.detected_text,\n      type: 'image'\n    });\n  }\n}\n\nreturn {\n  document_name: $input.item.json.document_name,\n  document_path: $input.item.json.document_path,\n  text_chunks: textChunks,\n  images: images,\n  processed_time: new Date().toISOString()\n};"
+      },
+      "name": "Process Data for Vectorization",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2060,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://vector-store:8000/embed-text",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "allowUnauthorizedCerts": true
+        },
+        "bodyParametersUi": {
+          "parameter": []
+        },
+        "jsonBody": "={{ { text: $('Process Data for Vectorization').item.json.text_chunks[0].text, metadata: { document_name: $('Process Data for Vectorization').item.json.document_name, page_number: $('Process Data for Vectorization').item.json.text_chunks[0].page_number } } }}"
+      },
+      "name": "Vectorize Text Chunks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        2280,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://vector-store:8000/embed-image",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "allowUnauthorizedCerts": true
+        },
+        "jsonBody": "={{ { image_url: $('Process Data for Vectorization').item.json.images[0].image_url, metadata: { document_name: $('Process Data for Vectorization').item.json.document_name, page_number: $('Process Data for Vectorization').item.json.images[0].page_number, schema_type: $('Process Data for Vectorization').item.json.images[0].schema_type, detected_text: $('Process Data for Vectorization').item.json.images[0].detected_text } } }}"
+      },
+      "name": "Vectorize Images",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        2280,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "content": "={{ { success: true, document_name: $('Process Data for Vectorization').item.json.document_name, message: 'Document processed successfully', text_chunks_count: $('Process Data for Vectorization').item.json.text_chunks.length, images_count: $('Process Data for Vectorization').item.json.images.length } }}",
+        "options": {}
+      },
+      "name": "Return Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2500,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Document Upload Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & Prepare File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Prepare File": {
+      "main": [
+        [
+          {
+            "node": "Large File?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Large File?": {
+      "main": [
+        [
+          {
+            "node": "Process Large File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Document Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Large File": {
+      "main": [
+        [
+          {
+            "node": "Check Processing Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Processing Status": {
+      "main": [
+        [
+          {
+            "node": "Still Processing?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 3 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Check Processing Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Still Processing?": {
+      "main": [
+        [
+          {
+            "node": "Wait 3 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Classify Extracted Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Extracted Images": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Document Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Process Data for Vectorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Data for Vectorization": {
+      "main": [
+        [
+          {
+            "node": "Vectorize Text Chunks",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Vectorize Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vectorize Text Chunks": {
+      "main": [
+        [
+          {
+            "node": "Return Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vectorize Images": {
+      "main": [
+        [
+          {
+            "node": "Return Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
