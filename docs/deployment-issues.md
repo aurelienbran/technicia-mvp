@@ -110,8 +110,36 @@ Cette checklist aide à prévenir les problèmes courants avant le déploiement.
 - [ ] Les quotas API sont suffisants pour la charge attendue
 - [ ] Les ports requis sont ouverts dans le pare-feu
 - [ ] Le service vector-store peut communiquer avec Qdrant
-- [ ] Les workflows n8n sont correctement configurés
 - [ ] Les certificats SSL sont valides et installés
+
+### Vérifications Spécifiques à n8n
+- [ ] La clé de chiffrement n8n est définie et sécurisée
+- [ ] Les 3 workflows essentiels (ingestion, question, diagnosis) sont importés
+- [ ] Tous les credentials n8n nécessaires sont configurés
+- [ ] Les webhooks sont correctement configurés avec les bonnes URLs
+- [ ] Le volume de données n8n est correctement monté et persistant
+- [ ] Les workflows n8n sont activés (mode "active")
+- [ ] Les connexions entre n8n et les microservices sont testées
+- [ ] Les timeouts pour les traitements longs sont correctement configurés
+- [ ] Les erreurs dans les workflows sont correctement gérées
+- [ ] Le monitoring des exécutions n8n est configuré
+
+## Problèmes connus de n8n et solutions
+
+### Problème potentiel: Perte de la clé de chiffrement n8n
+- **Impact**: Perte de tous les credentials stockés dans n8n, impossibilité d'accéder aux services externes
+- **Prévention**: Sauvegarder la clé de chiffrement dans un gestionnaire de secrets sécurisé
+- **Solution**: Reconfigurer manuellement tous les credentials si la clé est perdue
+
+### Problème potentiel: Déclencheurs HTTP non activés
+- **Impact**: Les workflows ne se déclenchent pas via webhooks, traitement des documents impossible
+- **Prévention**: Vérifier l'activation des workflows et la configuration des webhooks
+- **Solution**: Activer les workflows et corriger les URLs des webhooks
+
+### Problème potentiel: Erreurs de timeout pour les documents volumineux
+- **Impact**: Échec du traitement des gros documents PDF
+- **Prévention**: Configurer des timeouts adaptés aux volumes traités
+- **Solution**: Ajuster les paramètres de timeout dans les workflows n8n et fragmenter le traitement
 
 ## Procédure d'Intervention en Cas de Problème
 
@@ -136,6 +164,32 @@ Cette checklist aide à prévenir les problèmes courants avant le déploiement.
    - Identifier les causes profondes
    - Proposer des améliorations pour éviter la récurrence
    - Mettre à jour les procédures de déploiement
+
+### Procédures de Dépannage Spécifiques à n8n
+
+1. **Workflow qui échoue:**
+   ```bash
+   # Consulter les logs détaillés de n8n
+   docker logs technicia-n8n
+   
+   # Redémarrer uniquement le conteneur n8n
+   docker restart technicia-n8n
+   ```
+
+2. **Problèmes de connexion aux services externes:**
+   - Vérifier les credentials dans n8n
+   - Tester les API avec des requêtes curl depuis le conteneur n8n
+
+3. **Perte de données n8n:**
+   ```bash
+   # Restaurer à partir de la sauvegarde
+   cd /opt/technicia/docker
+   docker-compose down
+   rm -rf /opt/technicia/docker/n8n/data
+   mkdir -p /opt/technicia/docker/n8n
+   tar -xzf /opt/backups/technicia/n8n-YYYYMMDD.tar.gz -C /opt/technicia/docker/n8n
+   docker-compose up -d
+   ```
 
 ## Contacts en Cas de Problème
 
