@@ -30,6 +30,38 @@ Ce document répertorie les problèmes rencontrés lors du déploiement de Techn
 
 **Notes :** Il est recommandé d'utiliser des outils comme ShellCheck pour valider la syntaxe des scripts bash avant de les committer.
 
+### 3. Problème avec le Dockerfile du frontend - Absence de package-lock.json
+
+**Date :** 25/03/2025
+
+**Description :** Le Dockerfile du frontend utilise `npm ci` qui nécessite un fichier `package-lock.json`. Ce fichier n'existe pas dans le répertoire frontend, ce qui cause l'échec de la construction.
+
+**Solution :** Modification du Dockerfile pour utiliser `npm install` à la place de `npm ci`, ce qui permet l'installation des dépendances sans nécessiter de fichier `package-lock.json`.
+
+**Notes :** Pour une installation déterministe en production, il est recommandé de générer et versionner un fichier `package-lock.json`. Pour le MVP, `npm install` est suffisant.
+
+### 4. Structure incomplète du frontend - Absence du répertoire public
+
+**Date :** 25/03/2025
+
+**Description :** Le répertoire `public` avec le fichier `index.html` manquait dans le projet frontend, ce qui provoquait l'échec de la construction de l'application React.
+
+**Solution :** Ajout d'un répertoire `public` avec un fichier `index.html` minimal nécessaire à la construction de l'application React.
+
+**Notes :** Pour les futures versions, une vérification de structure complète devrait être effectuée avant de committer un projet React.
+
+### 5. Script de déploiement réinitialisant les modifications locales
+
+**Date :** 25/03/2025
+
+**Description :** Le script `deploy.sh` exécute `git reset --hard origin/main`, ce qui supprime toutes les modifications locales, y compris les correctifs ou configurations personnalisées.
+
+**Solution :** 
+1. Création d'un script `apply-patches.sh` qui applique automatiquement les correctifs nécessaires après la mise à jour du code.
+2. Modification du script `deploy.sh` pour préserver les fichiers modifiés importants et appeler le script de correctifs.
+
+**Notes :** Cette approche permet de maintenir un équilibre entre l'obtention des dernières mises à jour et la préservation des configurations locales.
+
 ## Problèmes en cours
 
 ### 1. Erreur CORS lors des appels API depuis le frontend
@@ -57,6 +89,19 @@ Ce document répertorie les problèmes rencontrés lors du déploiement de Techn
 - Explorer la possibilité de paralléliser le traitement des pages
 
 **Contournement temporaire :** Limiter la taille des documents à 30 Mo pour les démonstrations, et prétraiter les documents plus volumineux manuellement.
+
+### 3. Variables d'environnement non chargées correctement
+
+**Date :** 25/03/2025
+
+**Description :** Malgré la présence du fichier `.env`, Docker Compose affiche des avertissements indiquant que les variables d'environnement ne sont pas définies. Cela suggère un problème de chargement des variables d'environnement.
+
+**Investigation en cours :**
+- Vérifier le format du fichier `.env` et s'assurer qu'il est correctement situé
+- Tester différentes méthodes de chargement des variables d'environnement
+- Ajouter des logs supplémentaires pour diagnostiquer le problème de chargement
+
+**Contournement temporaire :** Définir manuellement les variables d'environnement dans le terminal avant d'exécuter Docker Compose.
 
 ## Problèmes potentiels à surveiller
 
