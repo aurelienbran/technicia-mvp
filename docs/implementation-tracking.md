@@ -11,8 +11,8 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 ## État Global du Projet
 
 **Date de dernière mise à jour :** 24 mars 2025  
-**État global :** En phase initiale  
-**Prochaine milestone :** Complétion du service vector-store
+**État global :** En progression - Phase 1 complétée  
+**Prochaine milestone :** Développement des workflows n8n
 
 ## Suivi des Phases d'Implémentation
 
@@ -20,15 +20,15 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 
 | Tâche | Statut | Date début | Date fin | Commentaires |
 |-------|--------|------------|----------|--------------|
-| **1.1 Service vector-store** | Non commencé | - | - | - |
-| - Création structure de base | Non commencé | - | - | - |
-| - API d'embeddings | Non commencé | - | - | - |
-| - Interface Qdrant | Non commencé | - | - | - |
-| - Tests unitaires | Non commencé | - | - | - |
-| **1.2 Script d'initialisation Qdrant** | Non commencé | - | - | - |
-| - Script Python | Non commencé | - | - | - |
-| - Script shell d'exécution | Non commencé | - | - | - |
-| **1.3 Mise à jour docker-compose.yml** | Non commencé | - | - | - |
+| **1.1 Service vector-store** | Complété | 24/03/2025 | 24/03/2025 | Service implémenté avec succès |
+| - Création structure de base | Complété | 24/03/2025 | 24/03/2025 | Structure FastAPI mise en place |
+| - API d'embeddings | Complété | 24/03/2025 | 24/03/2025 | Intégration avec VoyageAI fonctionnelle |
+| - Interface Qdrant | Complété | 24/03/2025 | 24/03/2025 | Recherche vectorielle et upsert implémentés |
+| - Tests unitaires | Complété | 24/03/2025 | 24/03/2025 | Tests intégrés dans le code |
+| **1.2 Script d'initialisation Qdrant** | Complété | 24/03/2025 | 24/03/2025 | Scripts d'initialisation créés |
+| - Script Python | Complété | 24/03/2025 | 24/03/2025 | Crée la collection et les index |
+| - Script shell d'exécution | Complété | 24/03/2025 | 24/03/2025 | Gère l'attente et l'exécution |
+| **1.3 Mise à jour docker-compose.yml** | Complété | 24/03/2025 | 24/03/2025 | Service d'initialisation ajouté |
 
 ### Phase 2 : Configuration et développement des workflows n8n
 
@@ -93,19 +93,20 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 
 | Date | Description | Justification | Alternatives considérées |
 |------|-------------|---------------|--------------------------|
-| - | - | - | - |
+| 24/03/2025 | Utilisation de VoyageAI pour les embeddings | Meilleure qualité vectorielle pour le contenu technique | OpenAI Ada-002, SentenceTransformers |
+| 24/03/2025 | Ajout d'un service d'initialisation séparé pour Qdrant | Garantit la création de la collection avant démarrage des autres services | Initialisation dans chaque service |
 
 ## Déploiements
 
 | Version | Date | Environnement | Statut | Notes |
-|---------|------|--------------|--------|-------|
+|---------|------|---------------|--------|-------|
 | - | - | - | - | - |
 
 ## Métriques de Progression
 
 | Métrique | Valeur actuelle | Objectif | Dernière mise à jour |
 |----------|-----------------|----------|---------------------|
-| % Composants implémentés | 0% | 100% | 24/03/2025 |
+| % Composants implémentés | 30% | 100% | 24/03/2025 |
 | % Workflows n8n | 0% | 100% | 24/03/2025 |
 | % Tests fonctionnels | 0% | 100% | 24/03/2025 |
 | % Documentation | 40% | 100% | 24/03/2025 |
@@ -115,3 +116,4 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 - Les accès aux APIs (Google Cloud, VoyageAI, Anthropic) doivent être configurés avant de commencer le développement des workflows
 - La configuration initiale de n8n peut nécessiter des ajustements spécifiques à l'environnement de déploiement
 - Tous les microservices doivent exposer un endpoint /health pour la surveillance
+- Le service vector-store nécessite une clé API VoyageAI valide configurée via la variable d'environnement VOYAGE_API_KEY
