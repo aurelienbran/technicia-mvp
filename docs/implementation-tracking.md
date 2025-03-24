@@ -11,8 +11,8 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 ## État Global du Projet
 
 **Date de dernière mise à jour :** 24 mars 2025  
-**État global :** En progression - Phase 2 complétée, Phase 3 à débuter  
-**Prochaine milestone :** Développement de l'interface utilisateur minimale
+**État global :** En progression - Phase 3 complétée, Phase 4 à débuter  
+**Prochaine milestone :** Intégration complète, tests et déploiement
 
 ## Suivi des Phases d'Implémentation
 
@@ -54,19 +54,19 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 
 | Tâche | Statut | Date début | Date fin | Commentaires |
 |-------|--------|------------|----------|--------------|
-| **3.1 Structure frontend** | Non commencé | - | - | - |
-| - Configuration projet | Non commencé | - | - | - |
-| - Routing et navigation | Non commencé | - | - | - |
-| **3.2 Module d'upload** | Non commencé | - | - | - |
-| - Interface glisser-déposer | Non commencé | - | - | - |
-| - Suivi de progression | Non commencé | - | - | - |
-| **3.3 Interface de chat** | Non commencé | - | - | - |
-| - Zone de saisie | Non commencé | - | - | - |
-| - Affichage des réponses | Non commencé | - | - | - |
-| - Visualisation des schémas | Non commencé | - | - | - |
-| **3.4 Module de diagnostic** | Non commencé | - | - | - |
-| - Interface pas à pas | Non commencé | - | - | - |
-| - Formulaires dynamiques | Non commencé | - | - | - |
+| **3.1 Structure frontend** | Complété | 24/03/2025 | 24/03/2025 | Structure React avec Tailwind CSS |
+| - Configuration projet | Complété | 24/03/2025 | 24/03/2025 | package.json, Dockerfile, nginx config |
+| - Routing et navigation | Complété | 24/03/2025 | 24/03/2025 | React Router implémenté avec layout commun |
+| **3.2 Module d'upload** | Complété | 24/03/2025 | 24/03/2025 | Interface complète d'upload de PDF |
+| - Interface glisser-déposer | Complété | 24/03/2025 | 24/03/2025 | Utilisation de react-dropzone |
+| - Suivi de progression | Complété | 24/03/2025 | 24/03/2025 | États de téléversement et feedback visuel |
+| **3.3 Interface de chat** | Complété | 24/03/2025 | 24/03/2025 | Chat interactif avec visualisation des réponses |
+| - Zone de saisie | Complété | 24/03/2025 | 24/03/2025 | Entrée utilisateur avec suggestions |
+| - Affichage des réponses | Complété | 24/03/2025 | 24/03/2025 | Format Markdown avec ReactMarkdown |
+| - Visualisation des schémas | Complété | 24/03/2025 | 24/03/2025 | Affichage des images référencées |
+| **3.4 Module de diagnostic** | Complété | 24/03/2025 | 24/03/2025 | Workflow pas à pas pour le diagnostic |
+| - Interface pas à pas | Complété | 24/03/2025 | 24/03/2025 | Progression visuelle entre les étapes |
+| - Formulaires dynamiques | Complété | 24/03/2025 | 24/03/2025 | Adaptés à chaque étape du diagnostic |
 
 ### Phase 4 : Intégration, tests et déploiement
 
@@ -97,6 +97,8 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 | 24/03/2025 | Ajout d'un service d'initialisation séparé pour Qdrant | Garantit la création de la collection avant démarrage des autres services | Initialisation dans chaque service |
 | 24/03/2025 | Workflow d'ingestion avec gestion asynchrone | Permet de traiter des documents volumineux sans bloquer le workflow | Traitement synchrone avec timeout étendu |
 | 24/03/2025 | Workflow de diagnostic avec workflow séparé pour les étapes | Permet une meilleure gestion de l'état entre les étapes du diagnostic | Approche monolithique avec un seul webhook |
+| 24/03/2025 | Interface utilisateur avec React et Tailwind CSS | Développement rapide et UI responsive | Vue.js, Angular |
+| 24/03/2025 | Configuration Nginx pour proxy vers n8n | Centralisation de l'accès API via le frontend | Exposition directe des endpoints n8n |
 
 ## Déploiements
 
@@ -108,17 +110,18 @@ Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il
 
 | Métrique | Valeur actuelle | Objectif | Dernière mise à jour |
 |----------|-----------------|----------|---------------------|
-| % Composants implémentés | 50% | 100% | 24/03/2025 |
+| % Composants implémentés | 75% | 100% | 24/03/2025 |
 | % Workflows n8n | 100% | 100% | 24/03/2025 |
+| % Interface utilisateur | 100% | 100% | 24/03/2025 |
 | % Tests fonctionnels | 0% | 100% | 24/03/2025 |
-| % Documentation | 50% | 100% | 24/03/2025 |
+| % Documentation | 60% | 100% | 24/03/2025 |
 
 ## Notes importantes
 
-- Les accès aux APIs (Google Cloud, VoyageAI, Anthropic) doivent être configurés avant de commencer le développement des workflows
+- Les accès aux APIs (Google Cloud, VoyageAI, Anthropic) doivent être configurés avant de commencer le déploiement
 - La configuration initiale de n8n peut nécessiter des ajustements spécifiques à l'environnement de déploiement
 - Tous les microservices doivent exposer un endpoint /health pour la surveillance
 - Le service vector-store nécessite une clé API VoyageAI valide configurée via la variable d'environnement VOYAGE_API_KEY
-- Le workflow d'ingestion nécessite une configuration correcte des webhooks dans n8n
-- Le workflow de diagnostic utilise une approche en deux parties: initialisation du diagnostic et progression par étapes
+- Le frontend envoie les requêtes via Nginx qui les route vers n8n (/api/* vers n8n:5678/)
 - Dans l'implémentation actuelle, l'état du diagnostic est simulé. En production, il faudra implémenter un stockage persistant (base de données)
+- Lors du déploiement, il faudra configurer les certificats SSL dans le dossier docker/ssl pour HTTPS
