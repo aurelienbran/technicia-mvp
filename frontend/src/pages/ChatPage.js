@@ -59,7 +59,7 @@ const ChatPage = () => {
       setMessages(prev => [...prev, assistantMessage]);
     } catch (err) {
       console.error('Error sending message:', err);
-      setError('Une erreur est survenue lors de l'envoi du message. Veuillez réessayer.');
+      setError("Une erreur est survenue lors de l'envoi du message. Veuillez réessayer.");
       
       // Message d'erreur
       const errorMessage = {
