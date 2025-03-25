@@ -134,7 +134,7 @@ fix_frontend_dockerfile() {
   if [ ! -f "$dockerfile" ]; then
     warn "Dockerfile du frontend non trouvé: $dockerfile"
     return
-  }
+  fi
   
   log "Vérification et correction du Dockerfile frontend..."
   
