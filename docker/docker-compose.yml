@@ -9,11 +9,10 @@ services:
     ports:
       - "5678:5678"
     environment:
-      - N8N_HOST=your-vps-ip-or-domain
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=https
+      - N8N_HOST=${N8N_HOST:-0.0.0.0}
+      - N8N_PORT=${N8N_PORT:-5678}
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      - WEBHOOK_TUNNEL_URL=https://your-domain/webhook/
       - N8N_LOG_LEVEL=info
     volumes:
       - ./n8n/data:/home/node/.n8n
