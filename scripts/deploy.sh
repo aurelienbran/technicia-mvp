@@ -233,8 +233,22 @@ DOCUMENT_AI_LOCATION=votre-région-document-ai
 DOCUMENT_AI_PROCESSOR_ID=votre-processor-id
 VOYAGE_API_KEY=votre-clé-voyage-ai
 ANTHROPIC_API_KEY=votre-clé-anthropic
+
+# Configuration n8n pour accepter les connexions externes
+N8N_HOST=0.0.0.0
+N8N_PORT=5678
+N8N_PROTOCOL=http
 EOF
       warn "Un fichier .env par défaut a été créé. Veuillez le modifier avec vos propres clés d'API."
+    else
+      # Vérifier et ajouter les variables n8n si elles n'existent pas
+      if ! grep -q "^N8N_HOST=" "$DEPLOY_DIR/$ENV_FILE"; then
+        echo -e "\n# Configuration n8n pour accepter les connexions externes" >> "$DEPLOY_DIR/$ENV_FILE"
+        echo "N8N_HOST=0.0.0.0" >> "$DEPLOY_DIR/$ENV_FILE"
+        echo "N8N_PORT=5678" >> "$DEPLOY_DIR/$ENV_FILE"
+        echo "N8N_PROTOCOL=http" >> "$DEPLOY_DIR/$ENV_FILE"
+        log "Variables de configuration n8n ajoutées au fichier .env"
+      fi
     fi
   fi
   
@@ -254,6 +268,12 @@ EOF
     warn "Le fichier d'identifiants Google Cloud n'existe pas."
     warn "Veuillez créer le fichier docker/credentials/google-credentials.json avec vos identifiants Google Cloud."
   fi
+  
+  # Préparation du répertoire de données n8n
+  log "Préparation du répertoire de données n8n..."
+  mkdir -p "$DEPLOY_DIR/docker/n8n/data/.n8n"
+  chown -R 1000:1000 "$DEPLOY_DIR/docker/n8n/data"
+  chmod -R 755 "$DEPLOY_DIR/docker/n8n/data"
   
   # Appliquer les corrections
   fix_frontend_dockerfile
@@ -332,6 +352,14 @@ check_services() {
   else
     warn "⚠️ Frontend non accessible"
   fi
+  
+  # Vérifier n8n spécifiquement
+  if curl -s "http://localhost:5678" > /dev/null; then
+    log "✅ Interface n8n accessible localement"
+  else
+    warn "⚠️ Interface n8n non accessible localement, correction en cours..."
+    "$DEPLOY_DIR/scripts/fix-n8n-permissions.sh"
+  fi
 }
 
 # Exécution principale
@@ -349,9 +377,17 @@ main() {
   
   log "==========================================================="
   log "Déploiement terminé avec succès!"
-  log "TechnicIA est accessible à l'adresse: http://localhost"
-  log "Interface n8n accessible à l'adresse: http://localhost:5678"
+  log "TechnicIA est accessible à l'adresse: http://$(hostname -I | awk '{print $1}')"
+  log "Interface n8n accessible à l'adresse: http://$(hostname -I | awk '{print $1}'):5678"
   log "==========================================================="
+  
+  # Vérifier si le pare-feu est configuré
+  if command -v ufw &> /dev/null; then
+    if ! ufw status | grep -q "5678/tcp"; then
+      warn "Le port 5678 n'est pas ouvert dans le pare-feu UFW."
+      warn "Exécutez 'sudo ufw allow 5678/tcp' pour ouvrir le port n8n."
+    fi
+  fi
 }
 
 # Exécution du script
