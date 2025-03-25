@@ -53,14 +53,38 @@ check_prerequisites() {
 check_n8n_access() {
   log "Vérification de l'accès à n8n à $N8N_URL..."
   
-  # Vérifier si n8n est accessible
-  if ! curl -s "$N8N_URL/healthz" | grep -q "ok"; then
+  # Essai 1 : méthode principale avec timeout augmenté
+  if curl -s --connect-timeout 10 --max-time 15 "$N8N_URL/healthz" | grep -q "ok"; then
+    log "n8n est accessible via l'endpoint healthz."
+    return 0
+  fi
+  
+  # Essai 2 : méthode alternative - vérifier juste si le serveur répond
+  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 15 "$N8N_URL")
+  if [[ "$HTTP_STATUS" == "200" || "$HTTP_STATUS" == "301" || "$HTTP_STATUS" == "302" || "$HTTP_STATUS" == "401" || "$HTTP_STATUS" == "403" ]]; then
+    log "n8n est accessible (code HTTP: $HTTP_STATUS)."
+    return 0
+  fi
+  
+  # Essai 3 : vérifier si le port est ouvert
+  if nc -z -w 10 $(echo "$N8N_URL" | sed -E 's|https?://([^/:]+)(:[0-9]+)?.*|\1 \2|' | sed 's/:/ /') 2>/dev/null; then
+    warn "Le port n8n semble ouvert, mais l'API n'est pas accessible. On continue malgré tout."
+    return 0
+  fi
+  
+  # Si toutes les vérifications échouent, demander à l'utilisateur
+  warn "Impossible de vérifier l'accessibilité de n8n automatiquement."
+  warn "Pouvez-vous accéder à l'interface n8n à $N8N_URL dans votre navigateur? (y/n)"
+  read -r -p "[y/n]: " response
+  
+  if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+    log "Accès confirmé par l'utilisateur. Poursuite du script..."
+    return 0
+  else
     error "Impossible d'accéder à n8n à $N8N_URL."
     error "Assurez-vous que n8n est en cours d'exécution et accessible."
     exit 1
   fi
-  
-  log "n8n est accessible."
 }
 
 # Importation des workflows
