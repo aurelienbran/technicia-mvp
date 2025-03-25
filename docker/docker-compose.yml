@@ -14,6 +14,7 @@ services:
       - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       - N8N_LOG_LEVEL=info
+      - N8N_SECURE_COOKIE=false
     volumes:
       - ./n8n/data:/home/node/.n8n
       - ../scripts:/home/node/scripts
