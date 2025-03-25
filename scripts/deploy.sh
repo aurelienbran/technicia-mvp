@@ -260,20 +260,43 @@ EOF
     echo "" >> "$DEPLOY_DIR/$ENV_FILE"
   fi
   
-  # Créer le répertoire des identifiants si nécessaire
+  # Créer les répertoires nécessaires avec les bonnes permissions
+  log "Création et configuration des répertoires essentiels..."
+  
+  # Répertoire des identifiants
   mkdir -p "$DEPLOY_DIR/docker/credentials"
+  chmod -R 755 "$DEPLOY_DIR/docker/credentials"
+  
+  # Répertoire de données n8n
+  mkdir -p "$DEPLOY_DIR/docker/n8n/data/.n8n"
+  chown -R 1000:1000 "$DEPLOY_DIR/docker/n8n/data"
+  chmod -R 755 "$DEPLOY_DIR/docker/n8n/data"
+  
+  # Répertoire de stockage Qdrant
+  mkdir -p "$DEPLOY_DIR/docker/qdrant/storage"
+  chmod -R 755 "$DEPLOY_DIR/docker/qdrant/storage"
+  
+  # Répertoire SSL
+  mkdir -p "$DEPLOY_DIR/docker/ssl"
+  chmod -R 755 "$DEPLOY_DIR/docker/ssl"
+  
+  # Répertoires des services
+  mkdir -p "$DEPLOY_DIR/services/document-processor"
+  mkdir -p "$DEPLOY_DIR/services/vision-classifier"
+  mkdir -p "$DEPLOY_DIR/services/vector-store"
+  chmod -R 755 "$DEPLOY_DIR/services"
+  
+  # Répertoire frontend
+  mkdir -p "$DEPLOY_DIR/frontend"
+  chmod -R 755 "$DEPLOY_DIR/frontend"
   
   # Vérifier le fichier d'identifiants Google Cloud
   if [ ! -f "$DEPLOY_DIR/docker/credentials/google-credentials.json" ]; then
     warn "Le fichier d'identifiants Google Cloud n'existe pas."
     warn "Veuillez créer le fichier docker/credentials/google-credentials.json avec vos identifiants Google Cloud."
+  else
+    chmod 644 "$DEPLOY_DIR/docker/credentials/google-credentials.json"
   fi
-  
-  # Préparation du répertoire de données n8n
-  log "Préparation du répertoire de données n8n..."
-  mkdir -p "$DEPLOY_DIR/docker/n8n/data/.n8n"
-  chown -R 1000:1000 "$DEPLOY_DIR/docker/n8n/data"
-  chmod -R 755 "$DEPLOY_DIR/docker/n8n/data"
   
   # Appliquer les corrections
   fix_frontend_dockerfile
@@ -358,7 +381,7 @@ check_services() {
     log "✅ Interface n8n accessible localement"
   else
     warn "⚠️ Interface n8n non accessible localement, correction en cours..."
-    "$DEPLOY_DIR/scripts/fix-n8n-permissions.sh"
+    "$DEPLOY_DIR/scripts/fix-permissions.sh"
   fi
 }
 
@@ -386,6 +409,10 @@ main() {
     if ! ufw status | grep -q "5678/tcp"; then
       warn "Le port 5678 n'est pas ouvert dans le pare-feu UFW."
       warn "Exécutez 'sudo ufw allow 5678/tcp' pour ouvrir le port n8n."
+    fi
+    if ! ufw status | grep -q "80/tcp"; then
+      warn "Le port 80 n'est pas ouvert dans le pare-feu UFW."
+      warn "Exécutez 'sudo ufw allow 80/tcp' pour ouvrir le port HTTP."
     fi
   fi
 }
