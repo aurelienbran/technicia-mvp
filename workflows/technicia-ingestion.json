@@ -4,7 +4,7 @@
     {
       "parameters": {
         "path": "upload",
-        "responseMode": "responseNode",
+        "responseMode": "lastNode",
         "options": {
           "binaryData": true,
           "bodyContentType": "multipart/form-data"
@@ -364,7 +364,7 @@
         },
         "options": {}
       },
-      "name": "Notify Frontend",
+      "name": "Notify Frontend Success",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
       "position": [
@@ -423,21 +423,6 @@
     },
     {
       "parameters": {
-        "content": "={{ JSON.stringify({success: false, errors: $json.errors || [$json.error_details && $json.error_details.error]}) }}",
-        "options": {
-          "responseCode": 400
-        }
-      },
-      "name": "Return Error",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [
-        780,
-        420
-      ]
-    },
-    {
-      "parameters": {
         "url": "=http://frontend:3000/api/notifications",
         "allowUnauthorizedCerts": true,
         "method": "POST",
@@ -463,7 +448,7 @@
         },
         "options": {}
       },
-      "name": "Notify Error",
+      "name": "Notify Frontend Error",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
       "position": [
@@ -481,21 +466,6 @@
       "typeVersion": 1,
       "position": [
         1260,
-        100
-      ]
-    },
-    {
-      "parameters": {
-        "content": "={{ JSON.stringify($json) }}",
-        "options": {
-          "responseCode": 200
-        }
-      },
-      "name": "Return Success",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [
-        1860,
         100
       ]
     },
@@ -565,6 +535,36 @@
         600,
         800
       ]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify({success: false, errors: $json.errors || [$json.error_details && $json.error_details.error]}) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "name": "Return Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        780,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "name": "Return Initial Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        100
+      ]
     }
   ],
   "connections": {
@@ -601,7 +601,7 @@
         ],
         [
           {
-            "node": "Return Error",
+            "node": "Return Validation Error",
             "type": "main",
             "index": 0
           }
@@ -779,14 +779,14 @@
       "main": [
         [
           {
-            "node": "Notify Frontend",
+            "node": "Notify Frontend Success",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Notify Frontend": {
+    "Notify Frontend Success": {
       "main": [
         [
           {
@@ -801,7 +801,7 @@
       "main": [
         [
           {
-            "node": "Notify Error",
+            "node": "Notify Frontend Error",
             "type": "main",
             "index": 0
           }
@@ -812,7 +812,7 @@
       "main": [
         [
           {
-            "node": "Notify Error",
+            "node": "Notify Frontend Error",
             "type": "main",
             "index": 0
           }
@@ -823,7 +823,7 @@
       "main": [
         [
           {
-            "node": "Notify Error",
+            "node": "Notify Frontend Error",
             "type": "main",
             "index": 0
           }
@@ -834,14 +834,14 @@
       "main": [
         [
           {
-            "node": "Notify Error",
+            "node": "Notify Frontend Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Notify Error": {
+    "Notify Frontend Error": {
       "main": [
         [
           {
@@ -856,7 +856,7 @@
       "main": [
         [
           {
-            "node": "Return Success",
+            "node": "Return Initial Success",
             "type": "main",
             "index": 0
           }
