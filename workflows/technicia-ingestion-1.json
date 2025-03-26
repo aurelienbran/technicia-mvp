@@ -52,11 +52,11 @@
       "name": "Store Document",
       "type": "n8n-nodes-base.executeFunction",
       "typeVersion": 1,
-      "position": [780, 220]
+      "position": [780, 200]
     },
     {
       "parameters": {
-        "jsCode": "// Copie des données du document pour la réponse\nreturn $json;"
+        "jsCode": "// Copie des données du document pour la réponse et le routage\nreturn $json;"
       },
       "name": "Prepare Response Data",
       "type": "n8n-nodes-base.code",
@@ -229,6 +229,13 @@
         ]
       ]
     },
+    "Prepare Response Data": {
+      "main": [
+        [
+          {"node": "Return Initial Success", "type": "main", "index": 0}
+        ]
+      ]
+    },
     "Document Size Router": {
       "main": [
         [
@@ -241,23 +248,12 @@
     },
     "Send to Large Document Processing": {
       "main": [
-        [
-          {"node": "Return Initial Success", "type": "main", "index": 0}
-        ]
+        []
       ]
     },
     "Send to Standard Processing": {
       "main": [
-        [
-          {"node": "Return Initial Success", "type": "main", "index": 0}
-        ]
-      ]
-    },
-    "Prepare Response Data": {
-      "main": [
-        [
-          {"node": "Return Initial Success", "type": "main", "index": 0}
-        ]
+        []
       ]
     },
     "Health Check Endpoint": {
