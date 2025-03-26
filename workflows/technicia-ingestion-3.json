@@ -1,0 +1,294 @@
+{
+  "name": "TechnicIA Ingestion 3 - Vectorisation et finalisation",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "api/part3/vectorize",
+        "responseMode": "onReceived",
+        "options": {
+          "bodyContentType": "json"
+        },
+        "httpMethod": "POST"
+      },
+      "name": "Vectorization Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 240],
+      "webhookId": "vectorize-webhook"
+    },
+    {
+      "parameters": {
+        "path": "api/part3/error",
+        "responseMode": "onReceived",
+        "options": {
+          "bodyContentType": "json"
+        },
+        "httpMethod": "POST"
+      },
+      "name": "Error Handling Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 480],
+      "webhookId": "error-webhook"
+    },
+    {
+      "parameters": {
+        "url": "=http://vector-service:5000/vectorize",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "document_id",
+              "value": "={{ $json.body.document_id }}"
+            },
+            {
+              "name": "text_blocks",
+              "value": "={{ $json.body.text_blocks }}"
+            },
+            {
+              "name": "images",
+              "value": "={{ $json.body.images }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Vectorize Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [420, 240],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traitement des résultats de la vectorisation\n\n// Récupérer les détails du document\nlet documentId = '', documentName = '';\n\n// Pour le webhook de vectorisation\nif ($node[\"Vectorization Webhook\"]) {\n  documentId = $node[\"Vectorization Webhook\"].json.body.document_id;\n  documentName = $node[\"Vectorization Webhook\"].json.body.document_name;\n}\n\n// Vérifier si nous avons reçu une réponse d'erreur\nconst hasError = $json.error || $json.success === false;\n\nif (hasError) {\n  // Préparer une structure d'erreur standardisée\n  return {\n    success: false,\n    error_details: {\n      phase: 'vectorization',\n      error: $json.error || 'Échec de la vectorisation du contenu',\n      statusCode: $json.statusCode || 500\n    },\n    document_id: documentId,\n    document_name: documentName || ''\n  };\n}\n\n// S'assurer que document_id est toujours présent\nif (!$json.document_id && documentId) {\n  $json.document_id = documentId;\n}\n\n// S'assurer que document_name est toujours présent\nif (!$json.document_name && documentName) {\n  $json.document_name = documentName;\n}\n\nreturn $json;"
+      },
+      "name": "Process Vectorization Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [600, 240]
+    },
+    {
+      "parameters": {
+        "url": "=http://vector-service:5000/index",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "collection_name",
+              "value": "technicia"
+            },
+            {
+              "name": "vectors",
+              "value": "={{ $json.vectors }}"
+            },
+            {
+              "name": "metadata",
+              "value": "={{ $json.metadata }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Index in Qdrant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [780, 240],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traitement des résultats de l'indexation\n\n// Vérifier si nous avons reçu une réponse d'erreur\nconst hasError = $json.error || $json.success === false;\n\nif (hasError) {\n  // Préparer une structure d'erreur standardisée\n  return {\n    success: false,\n    error_details: {\n      phase: 'indexation',\n      error: $json.error || 'Échec de l\\'indexation dans Qdrant',\n      statusCode: $json.statusCode || 500\n    },\n    document_id: $json.document_id || $node[\"Process Vectorization Results\"].json.document_id,\n    document_name: $json.document_name || $node[\"Process Vectorization Results\"].json.document_name\n  };\n}\n\n// Données d'entrée\nconst vectorizationResults = $node[\"Process Vectorization Results\"].json || {};\nconst indexingResults = $json || {};\n\n// Statistiques sur la vectorisation\nconst vectorStats = vectorizationResults.stats || {\n  text_chunks_vectorized: 0,\n  images_vectorized: 0\n};\n\n// Statistiques sur l'indexation\nconst indexStats = indexingResults.stats || {\n  points_indexed: 0,\n  index_size_kb: 0\n};\n\n// Préparer la réponse finale\nreturn {\n  success: true,\n  document_id: vectorizationResults.document_id,\n  document_name: vectorizationResults.document_name,\n  processing_completed: true,\n  processing_stats: {\n    text_chunks_count: vectorStats.text_chunks_vectorized,\n    images_count: vectorStats.images_vectorized,\n    total_vectors: indexStats.points_indexed,\n    vector_index_size_kb: indexStats.index_size_kb\n  },\n  retrieval_ready: true,\n  processing_time_ms: Date.now() - parseInt(vectorizationResults.document_id?.split('-')[1] || 0),\n  timestamp: new Date().toISOString()\n};"
+      },
+      "name": "Process Indexation Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [960, 240]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify({success: true, message: 'Requête reçue et en cours de traitement'}) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "name": "Return Webhook Acknowledgment",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [420, 360]
+    },
+    {
+      "parameters": {
+        "url": "=http://frontend:3000/api/notifications",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "type",
+              "value": "document_processed"
+            },
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "document_name",
+              "value": "={{ $json.document_name }}"
+            },
+            {
+              "name": "stats",
+              "value": "={{ JSON.stringify($json.processing_stats) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Notify Frontend Success",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1140, 240],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Préparation d'une erreur provenant du webhook ou de l'étape précédente\n\n// Si l'erreur vient du webhook\nif ($node[\"Error Handling Webhook\"]) {\n  return {\n    success: false,\n    document_id: $node[\"Error Handling Webhook\"].json.body.document_id,\n    document_name: $node[\"Error Handling Webhook\"].json.body.document_name,\n    error_details: JSON.parse($node[\"Error Handling Webhook\"].json.body.error_details)\n  };\n}\n\n// Sinon, passer l'erreur telle quelle\nreturn $json;"
+      },
+      "name": "Process Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [420, 480]
+    },
+    {
+      "parameters": {
+        "url": "=http://frontend:3000/api/notifications",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "type",
+              "value": "document_error"
+            },
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "document_name",
+              "value": "={{ $json.document_name }}"
+            },
+            {
+              "name": "error",
+              "value": "={{ JSON.stringify($json.error_details) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Notify Frontend Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [600, 480],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Journalisation unifiée (succès ou erreur)\n\n// Déterminer si c'est un succès ou une erreur\nconst isSuccess = $json.success !== false;\n\n// Créer une structure commune pour le logging\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  document_id: $json.document_id,\n  document_name: $json.document_name,\n  success: isSuccess\n};\n\n// Ajouter des informations spécifiques selon le type\nif (isSuccess) {\n  // Informations de succès\n  logEntry.processing_stats = $json.processing_stats || {};\n  logEntry.processing_time_ms = $json.processing_time_ms || 0;\n  logEntry.status = 'completed';\n} else {\n  // Informations d'erreur\n  logEntry.error_phase = $json.error_details?.phase || 'unknown';\n  logEntry.error_message = $json.error_details?.error || 'Erreur inconnue';\n  logEntry.status_code = $json.error_details?.statusCode || 500;\n  logEntry.status = 'failed';\n}\n\nreturn logEntry;"
+      },
+      "name": "Log Activity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1320, 360]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Finalisation du workflow\n\n// Étape finale pour un nettoyage ou des actions additionnelles\nreturn {\n  workflow_completed: true,\n  document_id: $json.document_id,\n  status: $json.status,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "name": "Workflow End",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1500, 360]
+    }
+  ],
+  "connections": {
+    "Vectorization Webhook": {
+      "main": [
+        [
+          {"node": "Vectorize Content", "type": "main", "index": 0},
+          {"node": "Return Webhook Acknowledgment", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Error Handling Webhook": {
+      "main": [
+        [
+          {"node": "Process Error", "type": "main", "index": 0},
+          {"node": "Return Webhook Acknowledgment", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Vectorize Content": {
+      "main": [
+        [
+          {"node": "Process Vectorization Results", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Process Vectorization Results": {
+      "main": [
+        [
+          {"node": "Index in Qdrant", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Index in Qdrant": {
+      "main": [
+        [
+          {"node": "Process Indexation Results", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Process Indexation Results": {
+      "main": [
+        [
+          {"node": "Notify Frontend Success", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Notify Frontend Success": {
+      "main": [
+        [
+          {"node": "Log Activity", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Process Error": {
+      "main": [
+        [
+          {"node": "Notify Frontend Error", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Notify Frontend Error": {
+      "main": [
+        [
+          {"node": "Log Activity", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Log Activity": {
+      "main": [
+        [
+          {"node": "Workflow End", "type": "main", "index": 0}
+        ]
+      ]
+    }
+  }
+}
