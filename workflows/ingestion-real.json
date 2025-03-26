@@ -80,6 +80,18 @@
         "options": {
           "allowUnauthorizedCerts": true,
           "timeout": 60000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data"
+            }
+          ]
+        },
+        "formData": {
+          "file": "={{ $binary[$json.binaryPropertyName].data }}"
         }
       },
       "name": "Process Standard File",
