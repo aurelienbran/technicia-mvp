@@ -1,0 +1,304 @@
+{
+  "name": "TechnicIA Ingestion 2 - Extraction et classification",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "api/part2/large-document",
+        "responseMode": "onReceived",
+        "options": {
+          "bodyContentType": "json"
+        },
+        "httpMethod": "POST"
+      },
+      "name": "Large Document Processing Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 200],
+      "webhookId": "large-document-webhook"
+    },
+    {
+      "parameters": {
+        "path": "api/part2/standard-document",
+        "responseMode": "onReceived",
+        "options": {
+          "bodyContentType": "json"
+        },
+        "httpMethod": "POST"
+      },
+      "name": "Standard Document Processing Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 400],
+      "webhookId": "standard-document-webhook"
+    },
+    {
+      "parameters": {
+        "url": "=http://document-processor:5001/process",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "document_id",
+              "value": "={{ $json.body.document_id }}"
+            },
+            {
+              "name": "document_path",
+              "value": "={{ $json.body.document_path }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Process Large Document",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [420, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "=http://document-processor:5000/extract",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "document_id",
+              "value": "={{ $json.body.document_id }}"
+            },
+            {
+              "name": "document_path",
+              "value": "={{ $json.body.document_path }}"
+            },
+            {
+              "name": "extract_images",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Process with Document AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [420, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ce nœud gère à la fois les réponses du processeur standard et du processeur pour gros documents\n\n// Récupérer les détails du document\nlet documentId = '', documentName = '';\n\n// Pour le webhook de traitement standard\nif ($node[\"Standard Document Processing Webhook\"]) {\n  documentId = $node[\"Standard Document Processing Webhook\"].json.body.document_id;\n  documentName = $node[\"Standard Document Processing Webhook\"].json.body.document_name;\n}\n\n// Pour le webhook de traitement de gros documents\nif ($node[\"Large Document Processing Webhook\"]) {\n  documentId = $node[\"Large Document Processing Webhook\"].json.body.document_id;\n  documentName = $node[\"Large Document Processing Webhook\"].json.body.document_name;\n}\n\n// Vérifier si nous avons reçu une réponse d'erreur\nconst hasError = $json.error || $json.success === false;\n\nif (hasError) {\n  // Préparer une structure d'erreur standardisée\n  return {\n    success: false,\n    error_details: {\n      phase: 'document_extraction',\n      error: $json.error || 'Échec de l\\'extraction du document',\n      statusCode: $json.statusCode || 500\n    },\n    document_id: documentId,\n    document_name: documentName || ''\n  };\n}\n\n// Pour le traitement de gros documents - répond immédiatement pour les requêtes asynchrones\nif ($json.processing_type && $json.processing_type === 'async') {\n  return {\n    success: true,\n    document_id: documentId,\n    document_name: documentName,\n    processing_status: 'processing',\n    estimated_completion: $json.estimated_completion || new Date(Date.now() + 60000).toISOString(),\n    message: 'Le document volumineux est en cours de traitement'\n  };\n}\n\n// S'assurer que document_id est toujours présent\nif (!$json.document_id && documentId) {\n  $json.document_id = documentId;\n}\n\n// S'assurer que document_name est toujours présent\nif (!$json.document_name && documentName) {\n  $json.document_name = documentName;\n}\n\n// Transmet les données régulières d'extraction pour le traitement suivant\nreturn $json;"
+      },
+      "name": "Process Document Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.success !== false }}"
+            }
+          ]
+        }
+      },
+      "name": "Extraction Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [780, 300]
+    },
+    {
+      "parameters": {
+        "url": "=http://vision-classifier:5000/classify-images",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "images",
+              "value": "={{ $json.images }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Classify Images with Vision AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [960, 240],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traitement des résultats de Document AI et Vision AI\n\n// Vérifier si nous avons reçu une réponse d'erreur de Vision AI\nconst hasError = $json.error || $json.success === false;\n\nif (hasError) {\n  // Préparer une structure d'erreur standardisée\n  return {\n    success: false,\n    error_details: {\n      phase: 'vision_classification',\n      error: $json.error || 'Échec de la classification des images',\n      statusCode: $json.statusCode || 500\n    },\n    document_id: $json.document_id,\n    document_name: $json.document_name || ''\n  };\n}\n\n// Récupérer les données Document AI\nconst docAiResults = $node[\"Process Document Result\"].json || {};\nconst docText = docAiResults.text_blocks || [];\nconst docImages = docAiResults.images || [];\n\n// Récupérer les données Vision AI\nconst visionResults = $json || {};\nconst classifiedImages = visionResults.classified_images || [];\n\n// Fusionner les informations d'images\nconst imagesWithClassification = docImages.map(img => {\n  const classification = classifiedImages.find(\n    classImg => classImg.image_id === img.image_id\n  ) || { classification: 'unknown', confidence: 0 };\n  \n  return {\n    ...img,\n    type: classification.classification,\n    confidence: classification.confidence,\n    is_technical: classification.classification === 'technical_diagram',\n    contains_text: classification.contains_text || false,\n    ocr_needed: classification.classification === 'technical_diagram' && classification.contains_text\n  };\n});\n\n// Préparer la structure de sortie\nreturn {\n  document_id: docAiResults.document_id,\n  document_name: docAiResults.document_name,\n  text_blocks: docText,\n  images: imagesWithClassification,\n  ready_for_vectorization: true,\n  stats: {\n    text_blocks_count: docText.length,\n    images_count: docImages.length,\n    technical_diagrams_count: imagesWithClassification.filter(img => img.is_technical).length,\n    decorative_images_count: imagesWithClassification.filter(img => !img.is_technical).length\n  },\n  timestamp: new Date().toISOString()\n};"
+      },
+      "name": "Process Vision Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1140, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Préparation d'une réponse d'erreur unifiée\n\n// Récupérer les informations d'erreur\nconst errorDetails = $json.error_details || {\n  phase: 'unknown',\n  error: 'Erreur inconnue',\n  statusCode: 500\n};\n\n// Récupérer les informations sur le document\nlet documentInfo = {\n  document_id: $json.document_id || '',\n  document_name: $json.document_name || ''\n};\n\n// Si les infos ne sont pas dans le json courant, chercher dans les nœuds webhook\nif (!documentInfo.document_id) {\n  if ($node[\"Large Document Processing Webhook\"]) {\n    documentInfo.document_id = $node[\"Large Document Processing Webhook\"].json.body.document_id;\n    documentInfo.document_name = $node[\"Large Document Processing Webhook\"].json.body.document_name;\n  } else if ($node[\"Standard Document Processing Webhook\"]) {\n    documentInfo.document_id = $node[\"Standard Document Processing Webhook\"].json.body.document_id;\n    documentInfo.document_name = $node[\"Standard Document Processing Webhook\"].json.body.document_name;\n  }\n}\n\n// Combiner pour la réponse d'erreur\nreturn {\n  success: false,\n  ...documentInfo,\n  error_details: {\n    ...errorDetails,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "name": "Prepare Error Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [960, 400]
+    },
+    {
+      "parameters": {
+        "url": "=http://ingestion-service:5000/api/part3/vectorize",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "document_name",
+              "value": "={{ $json.document_name }}"
+            },
+            {
+              "name": "text_blocks",
+              "value": "={{ JSON.stringify($json.text_blocks) }}"
+            },
+            {
+              "name": "images",
+              "value": "={{ JSON.stringify($json.images) }}"
+            },
+            {
+              "name": "stats",
+              "value": "={{ JSON.stringify($json.stats) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Send to Vectorization",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1320, 240],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "=http://ingestion-service:5000/api/part3/error",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "document_name",
+              "value": "={{ $json.document_name }}"
+            },
+            {
+              "name": "error_details",
+              "value": "={{ JSON.stringify($json.error_details) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Send Error to Part 3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1320, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify({success: true, message: 'Requête reçue et en cours de traitement'}) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "name": "Return Webhook Acknowledgment",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [420, 300]
+    }
+  ],
+  "connections": {
+    "Large Document Processing Webhook": {
+      "main": [
+        [
+          {"node": "Process Large Document", "type": "main", "index": 0},
+          {"node": "Return Webhook Acknowledgment", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Standard Document Processing Webhook": {
+      "main": [
+        [
+          {"node": "Process with Document AI", "type": "main", "index": 0},
+          {"node": "Return Webhook Acknowledgment", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Process Large Document": {
+      "main": [
+        [
+          {"node": "Process Document Result", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Process with Document AI": {
+      "main": [
+        [
+          {"node": "Process Document Result", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Process Document Result": {
+      "main": [
+        [
+          {"node": "Extraction Success?", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Extraction Success?": {
+      "main": [
+        [
+          {"node": "Classify Images with Vision AI", "type": "main", "index": 0}
+        ],
+        [
+          {"node": "Prepare Error Response", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Classify Images with Vision AI": {
+      "main": [
+        [
+          {"node": "Process Vision Results", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Process Vision Results": {
+      "main": [
+        [
+          {"node": "Send to Vectorization", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Prepare Error Response": {
+      "main": [
+        [
+          {"node": "Send Error to Part 3", "type": "main", "index": 0}
+        ]
+      ]
+    }
+  }
+}
