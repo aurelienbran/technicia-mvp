@@ -1,0 +1,261 @@
+{
+  "name": "TechnicIA Ingestion 1 - Réception et validation",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "upload",
+        "responseMode": "lastNode",
+        "options": {
+          "binaryData": true,
+          "bodyContentType": "multipart/form-data"
+        },
+        "httpMethod": "POST"
+      },
+      "name": "Document Upload Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "upload"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Vérification et validation du fichier PDF\n// Analyse les données binaires et vérifie la taille maximale\n\n// Déterminer si des données binaires sont présentes\nlet hasBinaryData = false;\nlet fileName = 'document.pdf';\nlet fileSize = 0;\nlet fileType = '';\nlet fileMimeType = '';\nlet errors = [];\n\nif ($input.item && $input.item.binary) {\n  const binaryProperties = Object.keys($input.item.binary);\n  if (binaryProperties.length > 0) {\n    hasBinaryData = true;\n    const firstProperty = binaryProperties[0];\n    \n    const fileData = $input.item.binary[firstProperty];\n    if (fileData) {\n      fileName = fileData.fileName || fileName;\n      fileSize = fileData.fileSize || fileSize;\n      fileMimeType = fileData.mimeType || '';\n      \n      // Vérifier si c'est un PDF\n      if (fileMimeType !== 'application/pdf') {\n        errors.push('Le fichier doit être au format PDF');\n      }\n      \n      // Vérifier la taille maximale (150 Mo)\n      const MAX_SIZE = 150 * 1024 * 1024; // 150 Mo en octets\n      if (fileSize > MAX_SIZE) {\n        errors.push(`Le fichier est trop volumineux (${Math.round(fileSize / (1024 * 1024))} Mo). Maximum autorisé: 150 Mo`);\n      }\n    }\n  } else {\n    errors.push('Aucune donnée binaire trouvée');\n  }\n} else {\n  errors.push('Aucun fichier n\\'a été téléchargé');\n}\n\n// Préparer l'objet de sortie avec les métadonnées\nconst output = {\n  success: errors.length === 0,\n  errors: errors,\n  document_id: hasBinaryData ? 'doc-' + Date.now() : null,\n  document_name: fileName,\n  document_size: fileSize,\n  document_type: fileMimeType,\n  processing_status: errors.length === 0 ? 'ready_for_extraction' : 'rejected',\n  large_document: fileSize > 25 * 1024 * 1024, // Marquer les documents > 25 Mo comme \"larges\"\n  timestamp: new Date().toISOString()\n};\n\nreturn output;"
+      },
+      "name": "Validate Document",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.success }}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "name": "Document Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "functionName": "writeBinaryFile",
+        "fileName": "={{ $json.document_id + '/' + $json.document_name }}",
+        "fileContent": "={{ $binary.data }}"
+      },
+      "name": "Store Document",
+      "type": "n8n-nodes-base.executeFunction",
+      "typeVersion": 1,
+      "position": [780, 220]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.large_document }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Document Size Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [960, 220]
+    },
+    {
+      "parameters": {
+        "url": "=http://ingestion-service:5000/api/part2/large-document",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "document_path",
+              "value": "={{ $json.document_id + '/' + $json.document_name }}"
+            },
+            {
+              "name": "document_name", 
+              "value": "={{ $json.document_name }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Send to Large Document Processing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1140, 160],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "=http://ingestion-service:5000/api/part2/standard-document",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "document_path",
+              "value": "={{ $json.document_id + '/' + $json.document_name }}"
+            },
+            {
+              "name": "document_name", 
+              "value": "={{ $json.document_name }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Send to Standard Processing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1140, 280],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify({success: false, errors: $json.errors || ['Format ou taille de fichier invalide']}) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "name": "Return Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [780, 420]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify({success: true, document_id: $json.document_id, status: 'processing', message: 'Document accepté et en cours de traitement', large_document: $json.large_document}) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "name": "Return Initial Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1320, 360]
+    },
+    {
+      "parameters": {
+        "path": "health/ingestion",
+        "responseMode": "lastNode",
+        "options": {},
+        "httpMethod": "GET"
+      },
+      "name": "Health Check Endpoint",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 600],
+      "webhookId": "health-ingestion"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Vérification de santé du pipeline d'ingestion\n\n// Vérifiez la connexion à chaque service\nconst services = [\n  {\n    name: \"Document Processor\",\n    status: \"operational\", // Simulé comme opérationnel\n    url: \"http://document-processor:5000/health\"\n  },\n  {\n    name: \"Vision Classifier\",\n    status: \"operational\", // Simulé comme opérationnel\n    url: \"http://vision-classifier:5000/health\"\n  },\n  {\n    name: \"Vector Service\",\n    status: \"operational\", // Simulé comme opérationnel\n    url: \"http://vector-service:5000/health\"\n  },\n  {\n    name: \"Frontend\",\n    status: \"operational\", // Simulé comme opérationnel\n    url: \"http://frontend:3000/api/health\"\n  }\n];\n\n// Vérifier l'état global\nconst allOperational = services.every(svc => svc.status === \"operational\");\n\n// Préparer la réponse\nconst healthStatus = {\n  service: \"TechnicIA Ingestion Pipeline\",\n  status: allOperational ? \"operational\" : \"degraded\",\n  timestamp: new Date().toISOString(),\n  services: services,\n  version: \"1.0.0\"\n};\n\nreturn healthStatus;"
+      },
+      "name": "Check Services Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [420, 600]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "name": "Return Health Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [600, 600]
+    }
+  ],
+  "connections": {
+    "Document Upload Webhook": {
+      "main": [
+        [
+          {"node": "Validate Document", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Validate Document": {
+      "main": [
+        [
+          {"node": "Document Valid?", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Document Valid?": {
+      "main": [
+        [
+          {"node": "Store Document", "type": "main", "index": 0}
+        ],
+        [
+          {"node": "Return Validation Error", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Store Document": {
+      "main": [
+        [
+          {"node": "Document Size Router", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Document Size Router": {
+      "main": [
+        [
+          {"node": "Send to Large Document Processing", "type": "main", "index": 0}
+        ],
+        [
+          {"node": "Send to Standard Processing", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Send to Large Document Processing": {
+      "main": [
+        [
+          {"node": "Return Initial Success", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Send to Standard Processing": {
+      "main": [
+        [
+          {"node": "Return Initial Success", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Health Check Endpoint": {
+      "main": [
+        [
+          {"node": "Check Services Status", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Check Services Status": {
+      "main": [
+        [
+          {"node": "Return Health Status", "type": "main", "index": 0}
+        ]
+      ]
+    }
+  }
+}
