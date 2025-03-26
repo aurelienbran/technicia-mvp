@@ -375,50 +375,14 @@
     },
     {
       "parameters": {
-        "jsCode": "// Erreur Document AI\n\n// Récupérer les informations du document\nconst documentInfo = {\n  document_id: $node[\"Validate Document\"].json.document_id,\n  document_name: $node[\"Validate Document\"].json.document_name\n};\n\n// Préparer les détails de l'erreur\nconst errorDetails = {\n  phase: \"document_ai\",\n  error: $json.error || \"Erreur de traitement avec Document AI\",\n  statusCode: $json.statusCode || 500,\n  timestamp: new Date().toISOString()\n};\n\n// Combiner pour la réponse\nconst result = {\n  success: false,\n  ...documentInfo,\n  error_details: errorDetails\n};\n\n// Log pour débogage\nconsole.log('Erreur Document AI:', JSON.stringify(result, null, 2));\n\nreturn result;"
+        "jsCode": "// Gestionnaire d'erreur centralisé pour tous les services\n// Identifie le service en erreur et prépare une réponse cohérente\n\n// Déterminer la source de l'erreur en fonction du nœud qui a appelé ce gestionnaire\n// Provient de la branche \"Error\" des nœuds conditionnels\nlet errorPhase = 'unknown';\nlet errorMsg = 'Erreur inconnue';\n\nif ($prevNode.name.includes('Document AI')) {\n  errorPhase = 'document_ai';\n  errorMsg = 'Erreur lors de l\\'extraction du document';\n} else if ($prevNode.name.includes('Vision')) {\n  errorPhase = 'vision_ai';\n  errorMsg = 'Erreur lors de la classification des images';\n} else if ($prevNode.name.includes('Vectorization')) {\n  errorPhase = 'vectorization';\n  errorMsg = 'Erreur lors de la vectorisation du contenu';\n} else if ($prevNode.name.includes('Indexation')) {\n  errorPhase = 'indexation';\n  errorMsg = 'Erreur lors de l\\'indexation dans Qdrant';\n}\n\n// Récupérer les infos du document depuis la source ou le nœud de validation\nconst documentInfo = {\n  document_id: $json.document_id || $node[\"Validate Document\"].json.document_id,\n  document_name: $json.document_name || $node[\"Validate Document\"].json.document_name\n};\n\n// Extraire l'erreur de la réponse ou utiliser le message par défaut\nconst errorDetails = {\n  phase: errorPhase,\n  error: $json.error || errorMsg,\n  statusCode: $json.statusCode || 500,\n  timestamp: new Date().toISOString()\n};\n\n// Combiner pour la réponse d'erreur\nconst result = {\n  success: false,\n  ...documentInfo,\n  error_details: errorDetails\n};\n\n// Log pour débogage (simplifié)\nconsole.log(`Erreur ${errorPhase}: ${errorDetails.error}`);\n\nreturn result;"
       },
-      "name": "Handle DocumentAI Error",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        1380,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Erreur Vision AI\n\n// Récupérer les informations du document\nconst documentInfo = {\n  document_id: $json.document_id || $node[\"Validate Document\"].json.document_id,\n  document_name: $json.document_name || $node[\"Validate Document\"].json.document_name\n};\n\n// Préparer les détails de l'erreur\nconst errorDetails = {\n  phase: \"vision_ai\",\n  error: $json.error || \"Erreur de classification des images\",\n  statusCode: $json.statusCode || 500,\n  timestamp: new Date().toISOString()\n};\n\n// Combiner pour la réponse\nconst result = {\n  success: false,\n  ...documentInfo,\n  error_details: errorDetails\n};\n\n// Log pour débogage\nconsole.log('Erreur Vision AI:', JSON.stringify(result, null, 2));\n\nreturn result;"
-      },
-      "name": "Handle VisionAI Error",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        1620,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Erreur Vectorisation\n\n// Récupérer les informations du document\nconst documentInfo = {\n  document_id: $json.document_id || $node[\"Validate Document\"].json.document_id,\n  document_name: $json.document_name || $node[\"Validate Document\"].json.document_name\n};\n\n// Préparer les détails de l'erreur\nconst errorDetails = {\n  phase: \"vectorization\",\n  error: $json.error || \"Erreur de vectorisation du contenu\",\n  statusCode: $json.statusCode || 500,\n  timestamp: new Date().toISOString()\n};\n\n// Combiner pour la réponse\nconst result = {\n  success: false,\n  ...documentInfo,\n  error_details: errorDetails\n};\n\n// Log pour débogage\nconsole.log('Erreur Vectorisation:', JSON.stringify(result, null, 2));\n\nreturn result;"
-      },
-      "name": "Handle Vectorization Error",
+      "name": "Handle Processing Error",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
         1980,
-        360
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Erreur Indexation\n\n// Récupérer les informations du document\nconst documentInfo = {\n  document_id: $json.document_id || $node[\"Validate Document\"].json.document_id,\n  document_name: $json.document_name || $node[\"Validate Document\"].json.document_name\n};\n\n// Préparer les détails de l'erreur\nconst errorDetails = {\n  phase: \"indexation\",\n  error: $json.error || \"Erreur d'indexation dans Qdrant\",\n  statusCode: $json.statusCode || 500,\n  timestamp: new Date().toISOString()\n};\n\n// Combiner pour la réponse\nconst result = {\n  success: false,\n  ...documentInfo,\n  error_details: errorDetails\n};\n\n// Log pour débogage\nconsole.log('Erreur Indexation:', JSON.stringify(result, null, 2));\n\nreturn result;"
-      },
-      "name": "Handle Indexation Error",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        2220,
-        320
+        400
       ]
     },
     {
@@ -452,14 +416,14 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
       "position": [
-        2340,
-        320
+        2140,
+        400
       ],
       "continueOnFail": true
     },
     {
       "parameters": {
-        "jsCode": "// Combiner les informations et retourner une réponse cohérente\n\n// Récupérer les infos du document\nlet documentInfo = {\n  document_id: $json.document_id,\n  document_name: $json.document_name\n};\n\n// Déterminer la source des statistiques\nlet stats = {};\n\n// Si on arrive depuis le merge Document AI et Vision AI\nif ($json.stats) {\n  stats = {\n    text_chunks_count: $json.stats.text_blocks_count,\n    images_count: $json.stats.images_count,\n    technical_diagrams_count: $json.stats.technical_diagrams_count,\n    decorative_images_count: $json.stats.decorative_images_count\n  };\n} else {\n  // Sinon, utiliser des statistiques simulées\n  stats = {\n    text_chunks_count: Math.floor(Math.random() * 20) + 5,\n    images_count: Math.floor(Math.random() * 10) + 1,\n    technical_diagrams_count: Math.floor(Math.random() * 5),\n    decorative_images_count: Math.floor(Math.random() * 5)\n  };\n}\n\n// Préparer des informations de traitement\nconst processingInfo = {\n  status: 'processing',\n  processing_type: $json.large_document ? 'large_document' : 'standard',\n  estimated_completion: new Date(Date.now() + 60000).toISOString() // +1 min\n};\n\n// Préparer la réponse finale\nconst result = {\n  success: true,\n  ...documentInfo,\n  ...stats,\n  ...processingInfo\n};\n\nconsole.log('Réponse finale:', JSON.stringify(result, null, 2));\n\nreturn result;"
+        "jsCode": "// Traitement de la réponse pour le client\n\n// Récupérer les infos du document\nlet documentInfo = {\n  document_id: $json.document_id,\n  document_name: $json.document_name\n};\n\n// Simuler des statistiques basiques\nlet stats = {\n  text_chunks_count: Math.floor(Math.random() * 20) + 5,\n  images_count: Math.floor(Math.random() * 10) + 1,\n  technical_diagrams_count: Math.floor(Math.random() * 5),\n  decorative_images_count: Math.floor(Math.random() * 5)\n};\n\n// Préparer des informations de traitement\nconst processingInfo = {\n  status: 'processing',\n  processing_type: $json.large_document ? 'large_document' : 'standard',\n  estimated_completion: new Date(Date.now() + 60000).toISOString() // +1 min\n};\n\n// Préparer la réponse finale\nconst result = {\n  success: true,\n  ...documentInfo,\n  ...stats,\n  ...processingInfo\n};\n\nconsole.log('Réponse initiale:', JSON.stringify(result, null, 2));\n\nreturn result;"
       },
       "name": "Prepare Response",
       "type": "n8n-nodes-base.code",
@@ -471,26 +435,14 @@
     },
     {
       "parameters": {
-        "jsCode": "// Journalisation du traitement\nconst activityLog = {\n  timestamp: new Date().toISOString(),\n  document_id: $json.document_id,\n  document_name: $json.document_name,\n  processing_steps: [\n    {\n      step: \"ingestion\",\n      status: \"success\",\n      timestamp: new Date().toISOString()\n    },\n    {\n      step: \"document_ai\",\n      status: \"success\",\n      timestamp: new Date().toISOString()\n    },\n    {\n      step: \"vision_ai\",\n      status: \"success\",\n      timestamp: new Date().toISOString()\n    },\n    {\n      step: \"vectorization\",\n      status: \"success\",\n      timestamp: new Date().toISOString()\n    },\n    {\n      step: \"indexation\",\n      status: \"success\",\n      timestamp: new Date().toISOString()\n    },\n    {\n      step: \"notification\",\n      status: \"success\",\n      timestamp: new Date().toISOString()\n    }\n  ],\n  overall_status: \"completed\",\n  processing_time_ms: $json.processing_time_ms || 0,\n  stats: $json.processing_stats || {}\n};\n\n// Envoi vers un système de logging (simulé ici)\nconsole.log('Log d\\'activité:', JSON.stringify(activityLog, null, 2));\n\n// Le traitement est terminé, pas besoin de retourner les données\nreturn activityLog;"
+        "jsCode": "// Journalisation d'activité ou d'erreur unifiée\n// Simplifié pour éviter les duplications\n\n// Déterminer si c'est un succès ou une erreur\nconst isSuccess = !$json.error_details;\n\n// Créer une structure commune pour le logging\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  document_id: $json.document_id,\n  document_name: $json.document_name,\n  success: isSuccess\n};\n\n// Ajouter des informations spécifiques selon le type\nif (isSuccess) {\n  // Informations de succès\n  logEntry.processing_stats = $json.processing_stats || {};\n  logEntry.processing_time_ms = $json.processing_time_ms || 0;\n  logEntry.status = 'completed';\n} else {\n  // Informations d'erreur\n  logEntry.error_phase = $json.error_details?.phase || 'unknown';\n  logEntry.error_message = $json.error_details?.error || 'Erreur inconnue';\n  logEntry.status_code = $json.error_details?.statusCode || 500;\n  logEntry.status = 'failed';\n}\n\n// Envoi vers un système de logging (simulé ici)\nconsole.log(`Log ${isSuccess ? 'd\\'activité' : 'd\\'erreur'}:`, JSON.stringify(logEntry, null, 2));\n\n// Renvoi pour la continuation du workflow\nreturn logEntry;"
       },
       "name": "Log Activity",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
-        2500,
-        200
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Journalisation des erreurs\nconst errorLog = {\n  timestamp: new Date().toISOString(),\n  document_id: $json.document_id,\n  document_name: $json.document_name,\n  error_phase: $json.error_details ? $json.error_details.phase : 'unknown',\n  error_message: $json.error_details ? $json.error_details.error : 'Erreur inconnue',\n  status_code: $json.error_details ? $json.error_details.statusCode : 500\n};\n\n// Envoi vers un système de logging des erreurs (simulé ici)\nconsole.log('Log d\\'erreur:', JSON.stringify(errorLog, null, 2));\n\n// Notification éventuelle aux administrateurs (simulé)\nconsole.log('Notification d\\'erreur envoyée aux administrateurs');\n\n// Retourner pour chaînage éventuel\nreturn errorLog;"
-      },
-      "name": "Log Error",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        2500,
-        320
+        2340,
+        400
       ]
     },
     {
@@ -568,14 +520,14 @@
     },
     {
       "parameters": {
-        "jsCode": "// Finaliser le processus après avoir journalisé l'activité ou les erreurs\nconst finalStatus = {\n  pipeline_completed: true,\n  document_id: $json.document_id || '',\n  document_name: $json.document_name || '',\n  timestamp: new Date().toISOString(),\n  status: $json.overall_status || $json.error_phase || 'unknown'\n};\n\nconsole.log('Pipeline d\\'ingestion terminé:', JSON.stringify(finalStatus, null, 2));\n\nreturn finalStatus;"
+        "jsCode": "// Finaliser le processus après avoir journalisé l'activité ou les erreurs\nconst finalStatus = {\n  pipeline_completed: true,\n  document_id: $json.document_id || '',\n  document_name: $json.document_name || '',\n  timestamp: new Date().toISOString(),\n  status: $json.status || 'unknown'\n};\n\nconsole.log('Pipeline d\\'ingestion terminé:', JSON.stringify(finalStatus, null, 2));\n\nreturn finalStatus;"
       },
       "name": "Finalize Process",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
-        2640,
-        260
+        2520,
+        300
       ]
     },
     {
@@ -586,13 +538,13 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
-        2800,
-        260
+        2700,
+        300
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Noeud créant un lien entre les voies du workflow\n// Permet de stocker le documentId et d'autres informations clés en cas d'erreur\n\n// Récupérer le contexte depuis la validation du document\nconst documentContext = {\n  document_id: $node[\"Validate Document\"].json.document_id,\n  document_name: $node[\"Validate Document\"].json.document_name,\n  document_size: $node[\"Validate Document\"].json.document_size,\n  large_document: $node[\"Validate Document\"].json.large_document,\n  timestamp: new Date().toISOString()\n};\n\n// Log d'information\nconsole.log('Document contexte sauvegardé pour traitement par lot:', JSON.stringify(documentContext, null, 2));\n\n// Retourner les informations contextuelles\nreturn documentContext;"
+        "jsCode": "// Noeud créant un lien entre les voies du workflow\n// Permet de stocker le documentId et d'autres informations clés en cas d'erreur\n\n// Récupérer le contexte depuis la validation du document\nconst documentContext = {\n  document_id: $node[\"Validate Document\"].json.document_id,\n  document_name: $node[\"Validate Document\"].json.document_name,\n  document_size: $node[\"Validate Document\"].json.document_size,\n  large_document: $node[\"Validate Document\"].json.large_document,\n  timestamp: new Date().toISOString()\n};\n\n// Log d'information simplifié\nconsole.log('Document contexte sauvegardé:', documentContext.document_id);\n\n// Retourner les informations contextuelles\nreturn documentContext;"
       },
       "name": "Save Document Context",
       "type": "n8n-nodes-base.code",
@@ -711,7 +663,7 @@
         ],
         [
           {
-            "node": "Handle DocumentAI Error",
+            "node": "Handle Processing Error",
             "type": "main",
             "index": 0
           }
@@ -740,7 +692,7 @@
         ],
         [
           {
-            "node": "Handle VisionAI Error",
+            "node": "Handle Processing Error",
             "type": "main",
             "index": 0
           }
@@ -780,7 +732,7 @@
         ],
         [
           {
-            "node": "Handle Vectorization Error",
+            "node": "Handle Processing Error",
             "type": "main",
             "index": 0
           }
@@ -809,7 +761,7 @@
         ],
         [
           {
-            "node": "Handle Indexation Error",
+            "node": "Handle Processing Error",
             "type": "main",
             "index": 0
           }
@@ -838,40 +790,7 @@
         ]
       ]
     },
-    "Handle DocumentAI Error": {
-      "main": [
-        [
-          {
-            "node": "Notify Frontend Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Handle VisionAI Error": {
-      "main": [
-        [
-          {
-            "node": "Notify Frontend Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Handle Vectorization Error": {
-      "main": [
-        [
-          {
-            "node": "Notify Frontend Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Handle Indexation Error": {
+    "Handle Processing Error": {
       "main": [
         [
           {
@@ -886,7 +805,7 @@
       "main": [
         [
           {
-            "node": "Log Error",
+            "node": "Log Activity",
             "type": "main",
             "index": 0
           }
@@ -905,17 +824,6 @@
       ]
     },
     "Log Activity": {
-      "main": [
-        [
-          {
-            "node": "Finalize Process",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Log Error": {
       "main": [
         [
           {
