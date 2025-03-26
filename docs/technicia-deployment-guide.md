@@ -429,7 +429,20 @@ Le script `deploy.sh` inclut des correctifs automatiques pour les problèmes con
    - **Symptôme** : Docker Compose affiche des avertissements sur les variables d'environnement non définies
    - **Solution** : Le script crée un lien symbolique du fichier `.env` vers le répertoire Docker et exporte les variables
 
-Pour plus de détails sur ces problèmes et d'autres, consultez le fichier [deployment-issues.md](docs/deployment-issues.md).
+### Problèmes avec les webhooks n8n
+
+Si vous rencontrez des problèmes avec le téléversement de fichiers PDF ou d'autres fonctionnalités basées sur les webhooks :
+
+1. Consultez le guide de dépannage des webhooks pour des instructions spécifiques : [webhook-troubleshooting.md](webhook-troubleshooting.md)
+
+2. Vérifiez que les webhooks dans n8n sont correctement configurés :
+   - Méthode HTTP correcte (POST pour les téléversements de fichiers)
+   - Options de traitement des données binaires activées
+   - Chemin d'accès correct
+
+3. Testez les webhooks avec des outils comme Postman ou curl avant d'utiliser l'interface utilisateur
+
+Pour plus de détails sur ces problèmes et d'autres, consultez le fichier [deployment-issues.md](deployment-issues.md).
 
 ### Problèmes de connexion aux services externes
 
@@ -447,7 +460,7 @@ Si vous rencontrez des problèmes de connexion aux services Google Cloud, Anthro
 
 ### Problèmes spécifiques à n8n
 
-Si vous rencontrez des problèmes avec n8n (workflows non déclenchés, erreurs d'API, etc.), consultez la section [Dépannage du guide de configuration n8n](docs/n8n-config-guide.md#dépannage) pour des solutions détaillées.
+Si vous rencontrez des problèmes avec n8n (workflows non déclenchés, erreurs d'API, etc.), consultez la section [Dépannage du guide de configuration n8n](n8n-config-guide.md#dépannage) pour des solutions détaillées.
 
 ## Mise à jour
 
@@ -496,7 +509,9 @@ TechnicIA inclut plusieurs scripts pour faciliter le déploiement et la configur
 
 En suivant ce guide, vous devriez avoir un déploiement fonctionnel du MVP de TechnicIA sur votre serveur VPS. Les scripts automatisés simplifient considérablement le processus de déploiement et de configuration.
 
-Pour une documentation détaillée sur la configuration de n8n, consultez le [Guide de Configuration n8n](docs/n8n-config-guide.md) dédié.
+Pour une documentation détaillée sur la configuration de n8n, consultez le [Guide de Configuration n8n](n8n-config-guide.md) dédié.
+
+Pour résoudre les problèmes liés aux webhooks, notamment pour le téléversement de fichiers, consultez le [Guide de dépannage des webhooks](webhook-troubleshooting.md).
 
 Si vous rencontrez des problèmes, consultez les fichiers de documentation spécifiques ou contactez l'équipe de support.
 
