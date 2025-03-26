@@ -2,7 +2,7 @@
 Service de traitement des documents PDF pour TechnicIA.
 Utilise Google Document AI pour l'extraction de texte et la structuration du contenu.
 """
-from fastapi import FastAPI, File, UploadFile, BackgroundTasks, HTTPException
+from fastapi import FastAPI, File, UploadFile, BackgroundTasks, HTTPException, Form, Request
 from fastapi.responses import JSONResponse
 from google.cloud import documentai_v1 as documentai
 import asyncio
@@ -11,7 +11,7 @@ import logging
 import tempfile
 import time
 import uuid
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pathlib import Path
 
 # Configuration du logging
@@ -73,6 +73,9 @@ async def process_document(file: UploadFile = File(...)):
         Les données extraites du document
     """
     try:
+        # Log pour debugging
+        logger.info(f"Réception d'un fichier: {file.filename}")
+        
         # Validation du type de fichier
         if not file.filename.lower().endswith('.pdf'):
             raise HTTPException(
@@ -174,6 +177,37 @@ async def process_document(file: UploadFile = File(...)):
         raise HTTPException(
             status_code=500,
             detail=f"Erreur lors du traitement du document: {str(e)}"
+        )
+
+@app.post("/process-file")
+async def process_file(request: Request):
+    """
+    Alternative endpoint pour traiter un fichier PDF avec des formulaires standards.
+    Utile pour les clients qui ont des difficultés avec le format multipart/form-data.
+    """
+    try:
+        form = await request.form()
+        
+        # Vérifier si un fichier est présent dans le formulaire
+        if "file" not in form:
+            all_keys = list(form.keys())
+            raise HTTPException(
+                status_code=400,
+                detail=f"Aucun fichier trouvé sous le nom 'file'. Clés disponibles: {all_keys}"
+            )
+        
+        file = form["file"]
+        
+        # Appeler la méthode de traitement standard
+        return await process_document(file)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur lors du traitement du fichier: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors du traitement du fichier: {str(e)}"
         )
 
 @app.post("/process-large-file")
@@ -296,6 +330,59 @@ async def get_task_status(task_id: str):
         "progress": task_info["progress"],
         "processing_time": time.time() - task_info["start_time"]
     }
+
+@app.post("/debug-upload")
+async def debug_upload(request: Request):
+    """
+    Endpoint de débogage pour tester l'upload de fichiers.
+    Affiche tous les détails sur la requête reçue pour faciliter le débogage.
+    """
+    try:
+        # Extraire les headers
+        headers = dict(request.headers.items())
+        
+        # Essayer de parser le formulaire
+        form_data = {}
+        try:
+            form = await request.form()
+            for key in form:
+                if hasattr(form[key], "filename"):  # C'est un fichier
+                    form_data[key] = {
+                        "filename": form[key].filename,
+                        "content_type": form[key].content_type,
+                        "size": len(await form[key].read())
+                    }
+                else:  # C'est une valeur standard
+                    form_data[key] = form[key]
+        except Exception as form_error:
+            form_data = {"error": str(form_error)}
+        
+        # Essayer de lire le body brut
+        body = None
+        try:
+            body = await request.body()
+            body = f"Taille du corps: {len(body)} octets"
+        except Exception as body_error:
+            body = {"error": str(body_error)}
+        
+        # Produire un rapport de débogage
+        debug_info = {
+            "request_method": request.method,
+            "url": str(request.url),
+            "headers": headers,
+            "form_data": form_data,
+            "body": body,
+            "client": request.client.host if request.client else None
+        }
+        
+        return debug_info
+        
+    except Exception as e:
+        logger.error(f"Erreur lors du débogage de l'upload: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 async def process_with_document_ai(task_id: str, file_path: str):
     """
