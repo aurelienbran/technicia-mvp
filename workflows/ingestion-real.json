@@ -75,23 +75,33 @@
       "parameters": {
         "url": "=http://technicia-document-processor:8000/process",
         "method": "POST",
-        "sendBinaryData": true,
-        "binaryPropertyName": "={{ $json.binaryPropertyName }}",
-        "options": {
-          "allowUnauthorizedCerts": true,
-          "timeout": 60000
-        },
-        "sendHeaders": true,
-        "headerParameters": {
+        "authentication": "none",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
           "parameters": [
             {
-              "name": "Content-Type",
-              "value": "multipart/form-data"
+              "name": "file",
+              "value": "={{ $binary[$json.binaryPropertyName].data }}",
+              "parameterType": "formBinaryData"
             }
           ]
         },
-        "formData": {
-          "file": "={{ $binary[$json.binaryPropertyName].data }}"
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 60000,
+          "responseFormat": "json",
+          "redirect": {
+            "redirect": {
+              "followRedirects": true,
+              "maxRedirects": 21
+            }
+          },
+          "proxy": {
+            "proxy": {
+              "enabled": false
+            }
+          }
         }
       },
       "name": "Process Standard File",
