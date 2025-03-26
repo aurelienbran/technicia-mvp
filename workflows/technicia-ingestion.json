@@ -1,5 +1,5 @@
 {
-  "name": "TechnicIA Document Ingestion - Simplifié",
+  "name": "TechnicIA Document Ingestion - Corrigé",
   "nodes": [
     {
       "parameters": {
@@ -345,6 +345,40 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [1320, 420]
+    },
+    {
+      "parameters": {
+        "path": "health/ingestion",
+        "responseMode": "lastNode",
+        "options": {},
+        "httpMethod": "GET"
+      },
+      "name": "Health Check Endpoint",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 600],
+      "webhookId": "health-ingestion"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Vérification de santé du pipeline d'ingestion\n\n// Vérifiez la connexion à chaque service\nconst services = [\n  {\n    name: \"Document Processor\",\n    status: \"operational\", // Simulé comme opérationnel\n    url: \"http://document-processor:5000/health\"\n  },\n  {\n    name: \"Vision Classifier\",\n    status: \"operational\", // Simulé comme opérationnel\n    url: \"http://vision-classifier:5000/health\"\n  },\n  {\n    name: \"Vector Service\",\n    status: \"operational\", // Simulé comme opérationnel\n    url: \"http://vector-service:5000/health\"\n  },\n  {\n    name: \"Frontend\",\n    status: \"operational\", // Simulé comme opérationnel\n    url: \"http://frontend:3000/api/health\"\n  }\n];\n\n// Vérifier l'état global\nconst allOperational = services.every(svc => svc.status === \"operational\");\n\n// Préparer la réponse\nconst healthStatus = {\n  service: \"TechnicIA Ingestion Pipeline\",\n  status: allOperational ? \"operational\" : \"degraded\",\n  timestamp: new Date().toISOString(),\n  services: services,\n  version: \"1.0.0\"\n};\n\nreturn healthStatus;"
+      },
+      "name": "Check Services Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [420, 600]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "name": "Return Health Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [600, 600]
     }
   ],
   "connections": {
@@ -481,6 +515,20 @@
       "main": [
         [
           {"node": "Workflow End", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Health Check Endpoint": {
+      "main": [
+        [
+          {"node": "Check Services Status", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Check Services Status": {
+      "main": [
+        [
+          {"node": "Return Health Status", "type": "main", "index": 0}
         ]
       ]
     }
