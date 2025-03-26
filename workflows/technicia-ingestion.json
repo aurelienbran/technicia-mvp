@@ -184,6 +184,119 @@
     },
     {
       "parameters": {
+        "url": "=http://vector-service:5000/vectorize",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "text_blocks",
+              "value": "={{ JSON.stringify($json.text_blocks) }}"
+            },
+            {
+              "name": "images",
+              "value": "={{ JSON.stringify($json.images.filter(img => img.is_technical)) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Vectorize Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1680,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://vector-service:5000/index",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "collection_name",
+              "value": "technicia"
+            },
+            {
+              "name": "vectors",
+              "value": "={{ $json.vectors }}"
+            },
+            {
+              "name": "metadata",
+              "value": "={{ $json.metadata }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Index in Qdrant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1860,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Préparation de la réponse finale après vectorisation et indexation\n\n// Données d'entrée\nconst vectorizationResults = $json || {};\nconst indexingResults = $node[\"Index in Qdrant\"].json || {};\n\n// Statistiques sur la vectorisation\nconst vectorStats = vectorizationResults.stats || {\n  text_chunks_vectorized: 0,\n  images_vectorized: 0\n};\n\n// Statistiques sur l'indexation\nconst indexStats = indexingResults.stats || {\n  points_indexed: 0,\n  index_size_kb: 0\n};\n\n// Préparer la réponse finale\nconst finalResponse = {\n  success: true,\n  document_id: vectorizationResults.document_id,\n  document_name: vectorizationResults.document_name,\n  processing_completed: true,\n  processing_stats: {\n    text_chunks_count: vectorStats.text_chunks_vectorized,\n    images_count: vectorStats.images_vectorized,\n    total_vectors: indexStats.points_indexed,\n    vector_index_size_kb: indexStats.index_size_kb\n  },\n  retrieval_ready: true,\n  processing_time_ms: Date.now() - parseInt(vectorizationResults.document_id.split('-')[1] || 0)\n};\n\n// Log de la réponse finale\nconsole.log('Réponse finale:', JSON.stringify(finalResponse, null, 2));\n\nreturn finalResponse;"
+      },
+      "name": "Finalize Indexing Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2040,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://frontend:3000/api/notifications",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "type",
+              "value": "document_processed"
+            },
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "document_name",
+              "value": "={{ $json.document_name }}"
+            },
+            {
+              "name": "stats",
+              "value": "={{ JSON.stringify($json.processing_stats) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Notify Frontend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        2220,
+        320
+      ]
+    },
+    {
+      "parameters": {
         "content": "={{ JSON.stringify({success: false, errors: $json.errors}) }}",
         "options": {
           "responseCode": 400
@@ -205,8 +318,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
-        1680,
-        220
+        1860,
+        100
       ]
     },
     {
@@ -220,8 +333,20 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        1860,
-        220
+        2040,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Journalisation du traitement\nconst activityLog = {\n  timestamp: new Date().toISOString(),\n  document_id: $json.document_id,\n  document_name: $json.document_name,\n  processing_steps: [\n    {\n      step: \"ingestion\",\n      status: \"success\",\n      timestamp: new Date().toISOString()\n    },\n    {\n      step: \"document_ai\",\n      status: \"success\",\n      timestamp: new Date().toISOString()\n    },\n    {\n      step: \"vision_ai\",\n      status: \"success\",\n      timestamp: new Date().toISOString()\n    },\n    {\n      step: \"vectorization\",\n      status: \"success\",\n      timestamp: new Date().toISOString()\n    },\n    {\n      step: \"indexation\",\n      status: \"success\",\n      timestamp: new Date().toISOString()\n    },\n    {\n      step: \"notification\",\n      status: \"success\",\n      timestamp: new Date().toISOString()\n    }\n  ],\n  overall_status: \"completed\",\n  processing_time_ms: $json.processing_time_ms || 0,\n  stats: $json.processing_stats || {}\n};\n\n// Envoi vers un système de logging (simulé ici)\nconsole.log('Log d\\'activité:', JSON.stringify(activityLog, null, 2));\n\n// Le traitement est terminé, pas besoin de retourner les données\nreturn activityLog;"
+      },
+      "name": "Log Activity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2400,
+        320
       ]
     }
   ],
@@ -332,7 +457,51 @@
       "main": [
         [
           {
-            "node": "Prepare Response",
+            "node": "Vectorize Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vectorize Content": {
+      "main": [
+        [
+          {
+            "node": "Index in Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Index in Qdrant": {
+      "main": [
+        [
+          {
+            "node": "Finalize Indexing Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Indexing Response": {
+      "main": [
+        [
+          {
+            "node": "Notify Frontend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Frontend": {
+      "main": [
+        [
+          {
+            "node": "Log Activity",
             "type": "main",
             "index": 0
           }
