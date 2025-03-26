@@ -478,7 +478,7 @@
       "typeVersion": 1,
       "position": [
         2500,
-        240
+        200
       ]
     },
     {
@@ -496,7 +496,7 @@
     {
       "parameters": {
         "path": "health/ingestion",
-        "responseMode": "responseNode",
+        "responseMode": "lastNode",
         "options": {},
         "httpMethod": "GET"
       },
@@ -564,6 +564,18 @@
       "position": [
         1440,
         100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Finaliser le processus après avoir journalisé l'activité ou les erreurs\nconst finalStatus = {\n  pipeline_completed: true,\n  document_id: $json.document_id || '',\n  document_name: $json.document_name || '',\n  timestamp: new Date().toISOString(),\n  status: $json.overall_status || $json.error_phase || 'unknown'\n};\n\nconsole.log('Pipeline d\\'ingestion terminé:', JSON.stringify(finalStatus, null, 2));\n\nreturn finalStatus;"
+      },
+      "name": "Finalize Process",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        260
       ]
     }
   ],
@@ -857,6 +869,28 @@
         [
           {
             "node": "Return Initial Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Activity": {
+      "main": [
+        [
+          {
+            "node": "Finalize Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error": {
+      "main": [
+        [
+          {
+            "node": "Finalize Process",
             "type": "main",
             "index": 0
           }
