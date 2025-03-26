@@ -73,7 +73,7 @@
     },
     {
       "parameters": {
-        "url": "=http://technicia-document-processor:8000/process-large-file",
+        "url": "=http://technicia-document-processor:8000/process",
         "method": "POST",
         "sendBinaryData": true,
         "binaryPropertyName": "={{ $json.binaryPropertyName }}",
@@ -142,9 +142,9 @@
     },
     {
       "parameters": {
-        "jsCode": "// Préparation des images pour classification\n\n// Récupérer les résultats du document traité\nlet resultData = $input.item.json;\n\n// Initialiser les variables\nlet documentId = resultData.task_id || `doc-${Date.now()}`;\nlet extractedImages = [];\n\n// Vérifier que nous avons un résultat\nif (resultData && resultData.result) {\n  const docResult = resultData.result;\n  \n  // Dans un cas réel, nous aurions des images extraites par Document AI\n  // Cette partie devrait être adaptée selon la structure exacte des résultats\n  // qui contiennent les images extraites\n  \n  // Exemple de structure attendue (à adapter selon le format réel de Document AI):\n  if (docResult.images && Array.isArray(docResult.images)) {\n    extractedImages = docResult.images.map(img => ({\n      id: img.id || `img-${Math.random().toString(36).substring(2, 11)}`,\n      path: img.path,\n      page_number: img.page_number || 1,\n      position: img.position || {}\n    }));\n  }\n}\n\n// Sortie avec les images extraites et les données du document\nreturn {\n  document_id: documentId,\n  extracted_images: extractedImages,\n  document_data: resultData.result || {}\n};"
+        "jsCode": "// Préparation des données extraites pour les étapes suivantes\nlet resultData = $input.item.json;\nlet documentId = '';\nlet documentData = {};\n\n// Déterminer le type de résultat (asynchrone ou synchrone)\nif (resultData.task_id) {\n  // Résultat asynchrone (gros fichier)\n  documentId = resultData.task_id;\n  documentData = resultData.result || {};\n} else if (resultData.document_id) {\n  // Résultat synchrone (fichier standard)\n  documentId = resultData.document_id;\n  documentData = resultData; // Le résultat est directement la structure de données\n} else {\n  // Format inconnu, tenter de récupérer ce qu'on peut\n  documentId = `doc-${Date.now()}`;\n  documentData = resultData;\n}\n\n// Extraire les images du document\nlet extractedImages = [];\n\n// Parcourir les pages pour extraire les images si elles existent\nif (documentData.pages && Array.isArray(documentData.pages)) {\n  for (const page of documentData.pages) {\n    if (page.images && Array.isArray(page.images)) {\n      extractedImages = extractedImages.concat(\n        page.images.map(img => ({\n          ...img,\n          page_number: page.page_number\n        }))\n      );\n    }\n  }\n}\n\n// Images indépendantes si elles existent\nif (documentData.images && Array.isArray(documentData.images)) {\n  extractedImages = extractedImages.concat(documentData.images);\n}\n\n// Sortie avec les images extraites et les données du document\nreturn {\n  document_id: documentId,\n  extracted_images: extractedImages,\n  document_data: documentData\n};"
       },
-      "name": "Extract Images",
+      "name": "Extract Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
@@ -390,7 +390,7 @@
       "main": [
         [
           {
-            "node": "Check Processing Status",
+            "node": "Extract Data",
             "type": "main",
             "index": 0
           }
@@ -430,14 +430,14 @@
         ],
         [
           {
-            "node": "Extract Images",
+            "node": "Extract Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extract Images": {
+    "Extract Data": {
       "main": [
         [
           {
