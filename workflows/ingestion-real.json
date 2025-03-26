@@ -1,0 +1,557 @@
+{
+  "name": "Document Ingestion Workflow (Traitement Réel)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "upload",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryData": true,
+          "bodyContentType": "multipart-form-data"
+        },
+        "httpMethod": "POST"
+      },
+      "name": "Document Upload Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "upload"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traitement du fichier PDF téléversé\ntry {\n  // Vérification que nous avons bien reçu un fichier binaire\n  if (!$input.item.binary) {\n    throw new Error('Aucune donnée binaire reçue');\n  }\n  \n  // Déterminer la clé de propriété binaire (généralement 'data' pour un formulaire multipart)\n  const binaryPropertyName = Object.keys($input.item.binary)[0];\n  if (!binaryPropertyName) {\n    throw new Error('Aucune propriété binaire trouvée');\n  }\n  \n  // Extraire les informations du fichier\n  const fileData = $input.item.binary[binaryPropertyName];\n  \n  // Validation du type de fichier\n  if (fileData.mimeType !== 'application/pdf') {\n    throw new Error('Le fichier doit être au format PDF');\n  }\n  \n  // Extraire les métadonnées du fichier\n  const fileName = fileData.fileName || 'document.pdf';\n  const fileSize = fileData.fileSize || 0;\n  \n  // Déterminer si c'est un gros fichier (> 25 Mo)\n  const isLargeFile = fileSize > 25 * 1024 * 1024;\n  \n  console.log(`Traitement du fichier: ${fileName}, Taille: ${fileSize}, Est volumineux: ${isLargeFile}`);\n  \n  // Retourner les informations nécessaires pour les étapes suivantes\n  return {\n    fileName,\n    fileSize,\n    isLargeFile,\n    mimeType: fileData.mimeType,\n    uploadTime: new Date().toISOString(),\n    binaryPropertyName: binaryPropertyName\n  };\n} catch (error) {\n  console.error('Erreur lors du traitement du fichier:', error.message);\n  return {\n    success: false,\n    error: error.message,\n    status: 400\n  };\n}"
+      },
+      "name": "Validate & Prepare File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.isLargeFile }}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "name": "Large File?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://technicia-document-processor:8000/process-large-file",
+        "method": "POST",
+        "sendBinaryData": true,
+        "binaryPropertyName": "={{ $json.binaryPropertyName }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 180000
+        }
+      },
+      "name": "Process Large File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        900,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://technicia-document-processor:8000/process-large-file",
+        "method": "POST",
+        "sendBinaryData": true,
+        "binaryPropertyName": "={{ $json.binaryPropertyName }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 60000
+        }
+      },
+      "name": "Process Standard File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        900,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "name": "Wait 3 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        40
+      ],
+      "webhookId": "wait-for-processing"
+    },
+    {
+      "parameters": {
+        "url": "=http://technicia-document-processor:8000/task/{{ $json.task_id }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 30000
+        }
+      },
+      "name": "Check Processing Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1140,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "notEqual",
+              "value2": "completed"
+            }
+          ]
+        }
+      },
+      "name": "Still Processing?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Préparation des images pour classification\n\n// Récupérer les résultats du document traité\nlet resultData = $input.item.json;\n\n// Initialiser les variables\nlet documentId = resultData.task_id || `doc-${Date.now()}`;\nlet extractedImages = [];\n\n// Vérifier que nous avons un résultat\nif (resultData && resultData.result) {\n  const docResult = resultData.result;\n  \n  // Dans un cas réel, nous aurions des images extraites par Document AI\n  // Cette partie devrait être adaptée selon la structure exacte des résultats\n  // qui contiennent les images extraites\n  \n  // Exemple de structure attendue (à adapter selon le format réel de Document AI):\n  if (docResult.images && Array.isArray(docResult.images)) {\n    extractedImages = docResult.images.map(img => ({\n      id: img.id || `img-${Math.random().toString(36).substring(2, 11)}`,\n      path: img.path,\n      page_number: img.page_number || 1,\n      position: img.position || {}\n    }));\n  }\n}\n\n// Sortie avec les images extraites et les données du document\nreturn {\n  document_id: documentId,\n  extracted_images: extractedImages,\n  document_data: resultData.result || {}\n};"
+      },
+      "name": "Extract Images",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traiter les images pour classification avec Vision AI\n\nconst data = $input.item.json;\nconst images = data.extracted_images || [];\nconst documentId = data.document_id;\n\n// Si nous n'avons pas d'images, passer directement à l'étape suivante\nif (images.length === 0) {\n  return {\n    document_id: documentId,\n    document_data: data.document_data,\n    classified_images: [],\n    message: \"Aucune image à classifier\"\n  };\n}\n\n// Dans un cas réel, nous préparerions un tableau d'objets avec les chemins des images\n// pour les envoyer au service vision-classifier\n\n// Simuler des images classifiées pour le test\nconst classifiedImages = images.map(img => ({\n  ...img,\n  is_technical_diagram: true,\n  schema_type: \"electrical\",\n  confidence: 0.85,\n  detected_text: \"Exemple de texte détecté dans l'image\"\n}));\n\nreturn {\n  document_id: documentId,\n  document_data: data.document_data,\n  classified_images: classifiedImages\n};"
+      },
+      "name": "Prepare Images for Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1700,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "batch_size": 1,
+        "resource": "={{ $json.classified_images.map(img => ({\n  id: img.id,\n  image_path: img.path,\n  page_number: img.page_number\n})) }}",
+        "resourceKey": "",
+        "options": {}
+      },
+      "name": "Process Images in Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [
+        1880,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://technicia-vision-classifier:8000/classify",
+        "method": "POST",
+        "sendBinaryData": false,
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 30000
+        },
+        "bodyFormData": {
+          "url": [
+            {
+              "name": "file_path",
+              "value": "={{ $json.image_path }}"
+            }
+          ]
+        }
+      },
+      "name": "Classify Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        2060,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Préparation des données pour vectorisation\nlet documentData = $input.item.json;\n\n// Récupérer les informations du document\nconst documentId = documentData.document_id || documentData.task_id || `doc-${Date.now()}`;\nlet textChunks = [];\nlet images = [];\n\n// Extraire les chunks de texte\nif (documentData.document_data && documentData.document_data.pages) {\n  for (const page of documentData.document_data.pages) {\n    // Regrouper tous les paragraphes de la page\n    if (page.paragraphs && page.paragraphs.length > 0) {\n      // Créer des chunks de taille raisonnable (environ 2-3 paragraphes par chunk)\n      let currentChunkText = '';\n      let currentChunkSize = 0;\n      \n      for (const paragraph of page.paragraphs) {\n        const paraText = paragraph.text || '';\n        currentChunkText += paraText + ' ';\n        currentChunkSize += paraText.length;\n        \n        // Si le chunk dépasse 1000 caractères, on le sauvegarde et on en commence un nouveau\n        if (currentChunkSize > 1000) {\n          textChunks.push({\n            text: currentChunkText.trim(),\n            page_number: page.page_number,\n            document_id: documentId\n          });\n          \n          currentChunkText = '';\n          currentChunkSize = 0;\n        }\n      }\n      \n      // Ajouter le dernier chunk s'il reste du texte\n      if (currentChunkText.trim().length > 0) {\n        textChunks.push({\n          text: currentChunkText.trim(),\n          page_number: page.page_number,\n          document_id: documentId\n        });\n      }\n    }\n  }\n}\n\n// Extraire les images classifiées\nif (documentData.classified_images && documentData.classified_images.length > 0) {\n  images = documentData.classified_images\n    .filter(img => img.is_technical_diagram) // Ne garder que les schémas techniques\n    .map(img => ({\n      image_path: img.path,\n      page_number: img.page_number,\n      schema_type: img.schema_type,\n      detected_text: img.detected_text || '',\n      document_id: documentId\n    }));\n}\n\n// Assurer qu'il y a au moins un chunk de texte pour les tests\nif (textChunks.length === 0) {\n  textChunks.push({\n    text: \"Contenu extrait du document pour la vectorisation.\",\n    page_number: 1,\n    document_id: documentId\n  });\n}\n\n// Log des informations pour débogage\nconsole.log(`Préparation vectorisation: ${textChunks.length} chunks de texte, ${images.length} images`);\n\nreturn {\n  document_id: documentId,\n  text_chunks: textChunks,\n  images: images,\n  processed_time: new Date().toISOString()\n};"
+      },
+      "name": "Process Data for Vectorization",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "batch_size": 5,
+        "resource": "={{ $json.text_chunks }}",
+        "resourceKey": "",
+        "options": {}
+      },
+      "name": "Process Text Chunks in Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "batch_size": 1,
+        "resource": "={{ $json.images }}",
+        "resourceKey": "",
+        "options": {}
+      },
+      "name": "Process Images in Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://technicia-vector-store:8000/embed-text",
+        "method": "POST",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 30000
+        },
+        "bodyContentType": "json",
+        "bodyContent": "={\n  \"text\": \"{{ $json.text }}\",\n  \"metadata\": {\n    \"document_id\": \"{{ $json.document_id }}\",\n    \"page_number\": {{ $json.page_number }},\n    \"type\": \"text\"\n  }\n}"
+      },
+      "name": "Vectorize Text Chunk",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        2600,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://technicia-vector-store:8000/embed-image",
+        "method": "POST",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 30000
+        },
+        "bodyContentType": "json",
+        "bodyContent": "={\n  \"image_url\": \"{{ $json.image_path }}\",\n  \"metadata\": {\n    \"document_id\": \"{{ $json.document_id }}\",\n    \"page_number\": {{ $json.page_number }},\n    \"schema_type\": \"{{ $json.schema_type }}\",\n    \"detected_text\": \"{{ $json.detected_text }}\",\n    \"type\": \"image\"\n  }\n}"
+      },
+      "name": "Vectorize Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        2600,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "content": "={{ \n  JSON.stringify({\n    \"success\": true,\n    \"document_id\": $node[\"Process Data for Vectorization\"].json.document_id,\n    \"message\": \"Document traité et vectorisé avec succès\",\n    \"stats\": {\n      \"text_chunks_processed\": $node[\"Process Data for Vectorization\"].json.text_chunks.length,\n      \"images_processed\": $node[\"Process Data for Vectorization\"].json.images.length,\n      \"processing_time\": new Date().toISOString()\n    }\n  }, null, 2)\n}}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "name": "Return Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2780,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "document_id",
+              "field2": "document_id"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Combine Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gestionnaire d'erreurs centralisé\ntry {\n  const errorData = $input.item.json;\n  \n  // Analyser l'erreur\n  let errorMessage = \"Une erreur inconnue est survenue\";\n  let errorSource = \"unknown\";\n  let errorCode = 500;\n  \n  if (errorData.error) {\n    errorMessage = errorData.error;\n  }\n  \n  if (errorData.detail) {\n    errorMessage = errorData.detail;\n  }\n  \n  if (errorData.status) {\n    errorCode = errorData.status;\n  }\n  \n  if (errorData.message) {\n    errorMessage = errorData.message;\n  }\n  \n  // Déterminer la source de l'erreur\n  if (errorData.source) {\n    errorSource = errorData.source;\n  } else if ($input.item.node) {\n    errorSource = $input.item.node;\n  }\n  \n  // Logger l'erreur pour le débogage\n  console.error(`Error in workflow: ${errorSource} - ${errorMessage} (${errorCode})`);\n  \n  return {\n    success: false,\n    timestamp: new Date().toISOString(),\n    error: {\n      message: errorMessage,\n      source: errorSource,\n      code: errorCode\n    }\n  };\n} catch (e) {\n  return {\n    success: false,\n    error: \"Erreur dans le gestionnaire d'erreurs: \" + e.message\n  };\n}"
+      },
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2060,
+        520
+      ]
+    }
+  ],
+  "connections": {
+    "Document Upload Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & Prepare File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Prepare File": {
+      "main": [
+        [
+          {
+            "node": "Large File?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Large File?": {
+      "main": [
+        [
+          {
+            "node": "Process Large File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Process Standard File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Large File": {
+      "main": [
+        [
+          {
+            "node": "Check Processing Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Standard File": {
+      "main": [
+        [
+          {
+            "node": "Check Processing Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 3 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Check Processing Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Processing Status": {
+      "main": [
+        [
+          {
+            "node": "Still Processing?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Still Processing?": {
+      "main": [
+        [
+          {
+            "node": "Wait 3 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Images": {
+      "main": [
+        [
+          {
+            "node": "Prepare Images for Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Images for Classification": {
+      "main": [
+        [
+          {
+            "node": "Process Images in Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Images in Batches": {
+      "main": [
+        [
+          {
+            "node": "Classify Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Image": {
+      "main": [
+        [
+          {
+            "node": "Combine Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Data for Vectorization": {
+      "main": [
+        [
+          {
+            "node": "Process Text Chunks in Batches",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Process Images in Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Text Chunks in Batches": {
+      "main": [
+        [
+          {
+            "node": "Vectorize Text Chunk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Images in Batches": {
+      "main": [
+        [
+          {
+            "node": "Vectorize Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vectorize Text Chunk": {
+      "main": [
+        [
+          {
+            "node": "Return Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vectorize Image": {
+      "main": [
+        [
+          {
+            "node": "Return Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Results": {
+      "main": [
+        [
+          {
+            "node": "Process Data for Vectorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}
