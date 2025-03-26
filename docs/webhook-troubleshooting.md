@@ -32,6 +32,42 @@ Voici un exemple de configuration correcte pour le nœud Webhook de n8n :
 }
 ```
 
+## Configuration du proxy Nginx
+
+Pour que l'upload de fichiers fonctionne correctement, la configuration du proxy Nginx doit permettre les requêtes volumineuses. Voici une configuration correcte :
+
+```nginx
+# Configuration pour les fichiers volumineux
+client_max_body_size 150M;
+
+# Proxy pour les webhooks n8n
+location /webhook/ {
+    proxy_pass http://n8n:5678/webhook/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_cache_bypass $http_upgrade;
+    
+    # Configuration spécifique pour l'upload via webhook
+    proxy_request_buffering off;
+    proxy_buffering off;
+    client_max_body_size 150M;
+    proxy_read_timeout 300s;
+}
+
+# URL raccourcie pour l'upload spécifiquement
+location /api/upload {
+    rewrite ^/api/upload$ /webhook/document-upload permanent;
+}
+```
+
+Les points clés sont :
+- `client_max_body_size` doit être suffisamment grand pour les fichiers PDF
+- `proxy_request_buffering off` et `proxy_buffering off` pour éviter les problèmes avec les fichiers volumineux
+- `proxy_read_timeout` suffisamment long pour permettre le traitement des gros fichiers
+- La redirection `/api/upload` vers `/webhook/document-upload` pour garantir la cohérence entre l'API utilisée par le frontend et le webhook n8n
+
 ## Problèmes courants et solutions
 
 ### 1. Erreur "No file received"
@@ -61,7 +97,24 @@ Voici un exemple de configuration correcte pour le nœud Webhook de n8n :
 - Vérifiez les logs du conteneur frontend pour voir si les requêtes atteignent nginx
 - Vérifiez les logs du conteneur n8n pour voir si les requêtes atteignent n8n
 
-### 4. Accès au webhook sans nom de domaine
+### 4. Erreur "Request entity too large"
+
+**Problème** : Nginx rejette les fichiers volumineux.
+
+**Solutions** :
+- Augmentez la valeur de `client_max_body_size` dans la configuration Nginx
+- Assurez-vous que cette directive est présente dans le bon contexte (server ou location)
+
+### 5. Timeout lors de l'upload
+
+**Problème** : L'upload échoue après un certain temps pour les gros fichiers.
+
+**Solutions** :
+- Augmentez `proxy_read_timeout` dans la configuration Nginx
+- Désactivez le buffering avec `proxy_request_buffering off` et `proxy_buffering off`
+- Vérifiez si n8n a des timeout configurés et ajustez-les si nécessaire
+
+### 6. Accès au webhook sans nom de domaine
 
 Pour tester votre webhook localement ou sans nom de domaine configuré :
 
@@ -107,5 +160,30 @@ Si des problèmes persistent :
 2. **Inspectez les requêtes réseau** dans les outils de développement du navigateur
 3. **Ajoutez des nœuds Function** dans le workflow pour afficher les données reçues à chaque étape
 4. **Vérifiez que le chemin du webhook** correspond à celui configuré dans Nginx
+5. **Testez le frontend et le webhook séparément** pour isoler le problème
+
+### Inspection des requêtes réseau
+
+Pour déboguer les problèmes d'upload depuis le navigateur :
+1. Ouvrez les outils de développement (F12)
+2. Naviguez vers l'onglet "Network"
+3. Filtrez par "Fetch/XHR"
+4. Tentez l'upload et observez la requête `/api/upload`
+5. Vérifiez le statut de la réponse, les en-têtes et le corps de la requête
+
+### Capture des logs Docker
+
+Pour une analyse plus approfondie:
+
+```bash
+# Logs du frontend (Nginx)
+docker logs -f technicia-frontend
+
+# Logs de n8n
+docker logs -f technicia-n8n | grep webhook
+
+# Logs du document-processor
+docker logs -f technicia-document-processor
+```
 
 Ces instructions devraient vous aider à dépanner efficacement les problèmes liés aux webhooks dans TechnicIA.
