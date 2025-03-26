@@ -22,7 +22,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Traitement du fichier PDF téléversé\ntry {\n  // Vérification que nous avons bien reçu un fichier binaire\n  if (!$input.item.binary) {\n    throw new Error('Aucune donnée binaire reçue');\n  }\n  \n  // Déterminer la clé de propriété binaire (généralement 'data' pour un formulaire multipart)\n  const binaryPropertyName = Object.keys($input.item.binary)[0];\n  if (!binaryPropertyName) {\n    throw new Error('Aucune propriété binaire trouvée');\n  }\n  \n  // Extraire les informations du fichier\n  const fileData = $input.item.binary[binaryPropertyName];\n  \n  // Validation du type de fichier\n  if (fileData.mimeType !== 'application/pdf') {\n    throw new Error('Le fichier doit être au format PDF');\n  }\n  \n  // Extraire les métadonnées du fichier\n  const fileName = fileData.fileName || 'document.pdf';\n  const fileSize = fileData.fileSize || 0;\n  \n  // Déterminer si c'est un gros fichier (> 25 Mo)\n  const isLargeFile = fileSize > 25 * 1024 * 1024;\n  \n  console.log(`Traitement du fichier: ${fileName}, Taille: ${fileSize}, Est volumineux: ${isLargeFile}`);\n  \n  // Retourner les informations nécessaires pour les étapes suivantes\n  return {\n    fileName,\n    fileSize,\n    isLargeFile,\n    mimeType: fileData.mimeType,\n    uploadTime: new Date().toISOString(),\n    binaryPropertyName: binaryPropertyName\n  };\n} catch (error) {\n  console.error('Erreur lors du traitement du fichier:', error.message);\n  return {\n    success: false,\n    error: error.message,\n    status: 400\n  };\n}"
+        "jsCode": "// Traitement du fichier PDF téléversé\ntry {\n  // Vérification que nous avons bien reçu un fichier binaire\n  if (!$input.item.binary) {\n    throw new Error('Aucune donnée binaire reçue');\n  }\n  \n  // Déterminer la clé de propriété binaire (généralement 'data' pour un formulaire multipart)\n  const binaryPropertyName = Object.keys($input.item.binary)[0];\n  if (!binaryPropertyName) {\n    throw new Error('Aucune propriété binaire trouvée');\n  }\n  \n  // Extraire les informations du fichier\n  const fileData = $input.item.binary[binaryPropertyName];\n  \n  // Validation du type de fichier\n  if (fileData.mimeType !== 'application/pdf') {\n    throw new Error('Le fichier doit être au format PDF');\n  }\n  \n  // Extraire les métadonnées du fichier\n  const fileName = fileData.fileName || 'document.pdf';\n  const fileSize = fileData.fileSize || 0;\n  \n  // Déterminer si c'est un gros fichier (> 25 Mo)\n  const isLargeFile = fileSize > 25 * 1024 * 1024;\n  \n  console.log(`Traitement du fichier: ${fileName}, Taille: ${fileSize}, Est volumineux: ${isLargeFile}`);\n  console.log(`Propriété binaire: ${binaryPropertyName}`);\n  \n  // Retourner les informations nécessaires pour les étapes suivantes\n  return {\n    fileName,\n    fileSize,\n    isLargeFile,\n    mimeType: fileData.mimeType,\n    uploadTime: new Date().toISOString(),\n    binaryPropertyName: binaryPropertyName\n  };\n} catch (error) {\n  console.error('Erreur lors du traitement du fichier:', error.message);\n  return {\n    success: false,\n    error: error.message,\n    status: 400\n  };\n}"
       },
       "name": "Validate & Prepare File",
       "type": "n8n-nodes-base.code",
@@ -73,11 +73,39 @@
     },
     {
       "parameters": {
-        "url": "http://technicia-document-processor:8000/process",
+        "url": "http://technicia-document-processor:8000/debug-upload",
         "method": "POST",
-        "authentication": "none",
         "sendBinaryData": true,
         "binaryPropertyName": "={{ $json.binaryPropertyName }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 60000,
+          "responseFormat": "json"
+        }
+      },
+      "name": "Debug Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        800,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://technicia-document-processor:8000/process-file",
+        "method": "POST",
+        "sendBinaryData": true,
+        "binaryPropertyName": "={{ $json.binaryPropertyName }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data"
+            }
+          ]
+        },
         "options": {
           "allowUnauthorizedCerts": true,
           "timeout": 60000,
@@ -88,7 +116,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
       "position": [
-        900,
+        980,
         400
       ]
     },
@@ -144,7 +172,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Préparation des données extraites pour les étapes suivantes\nlet resultData = $input.item.json;\nlet documentId = '';\nlet documentData = {};\n\n// Déterminer le type de résultat (asynchrone ou synchrone)\nif (resultData.task_id) {\n  // Résultat asynchrone (gros fichier)\n  documentId = resultData.task_id;\n  documentData = resultData.result || {};\n} else if (resultData.document_id) {\n  // Résultat synchrone (fichier standard)\n  documentId = resultData.document_id;\n  documentData = resultData; // Le résultat est directement la structure de données\n} else {\n  // Format inconnu, tenter de récupérer ce qu'on peut\n  documentId = `doc-${Date.now()}`;\n  documentData = resultData;\n}\n\n// Extraire les images du document\nlet extractedImages = [];\n\n// Parcourir les pages pour extraire les images si elles existent\nif (documentData.pages && Array.isArray(documentData.pages)) {\n  for (const page of documentData.pages) {\n    if (page.images && Array.isArray(page.images)) {\n      extractedImages = extractedImages.concat(\n        page.images.map(img => ({\n          ...img,\n          page_number: page.page_number\n        }))\n      );\n    }\n  }\n}\n\n// Images indépendantes si elles existent\nif (documentData.images && Array.isArray(documentData.images)) {\n  extractedImages = extractedImages.concat(documentData.images);\n}\n\n// Sortie avec les images extraites et les données du document\nreturn {\n  document_id: documentId,\n  extracted_images: extractedImages,\n  document_data: documentData\n};"
+        "jsCode": "// Préparation des données extraites pour les étapes suivantes\nlet resultData = $input.item.json;\nlet documentId = '';\nlet documentData = {};\n\n// Afficher les données reçues pour le débogage\nconsole.log('Données reçues:', JSON.stringify(resultData, null, 2));\n\n// Déterminer le type de résultat (asynchrone ou synchrone)\nif (resultData.task_id) {\n  // Résultat asynchrone (gros fichier)\n  documentId = resultData.task_id;\n  documentData = resultData.result || {};\n} else if (resultData.document_id) {\n  // Résultat synchrone (fichier standard)\n  documentId = resultData.document_id;\n  documentData = resultData; // Le résultat est directement la structure de données\n} else {\n  // Format inconnu, tenter de récupérer ce qu'on peut\n  documentId = `doc-${Date.now()}`;\n  documentData = resultData;\n}\n\n// Extraire les images du document\nlet extractedImages = [];\n\n// Parcourir les pages pour extraire les images si elles existent\nif (documentData.pages && Array.isArray(documentData.pages)) {\n  for (const page of documentData.pages) {\n    if (page.images && Array.isArray(page.images)) {\n      extractedImages = extractedImages.concat(\n        page.images.map(img => ({\n          ...img,\n          page_number: page.page_number\n        }))\n      );\n    }\n  }\n}\n\n// Images indépendantes si elles existent\nif (documentData.images && Array.isArray(documentData.images)) {\n  extractedImages = extractedImages.concat(documentData.images);\n}\n\n// Sortie avec les images extraites et les données du document\nreturn {\n  document_id: documentId,\n  extracted_images: extractedImages,\n  document_data: documentData\n};"
       },
       "name": "Extract Data",
       "type": "n8n-nodes-base.code",
@@ -370,7 +398,7 @@
         ],
         [
           {
-            "node": "Process Standard File",
+            "node": "Debug Upload",
             "type": "main",
             "index": 0
           }
@@ -382,6 +410,17 @@
         [
           {
             "node": "Check Processing Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Debug Upload": {
+      "main": [
+        [
+          {
+            "node": "Process Standard File",
             "type": "main",
             "index": 0
           }
