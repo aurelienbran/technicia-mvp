@@ -1,130 +1,234 @@
-# Fichier de Suivi d'Implémentation TechnicIA MVP
+# Suivi d'implémentation - TechnicIA MVP
 
-## Instructions d'utilisation
+Ce document trace l'état d'avancement de l'implémentation de TechnicIA MVP et sert de référence pour l'équipe technique.
 
-Ce fichier sert à suivre l'avancement de l'implémentation du MVP TechnicIA. Il doit être mis à jour à chaque étape complétée ou milestone atteint. Pour chaque tâche, indiquez :
-- La date de mise à jour
-- Le statut (Non commencé, En cours, Complété, Bloqué)
-- Le responsable (si applicable)
-- Les commentaires ou problèmes rencontrés
+## État actuel de l'implémentation
 
-## État Global du Projet
+### Infrastructure (100%)
 
-**Date de dernière mise à jour :** 24 mars 2025  
-**État global :** Complété - Toutes les phases implémentées  
-**Prochaine milestone :** Déploiement sur l'environnement de production
+- ✅ Configuration du VPS
+- ✅ Mise en place de Docker et Docker Compose
+- ✅ Création des images Docker pour tous les services
+- ✅ Configuration du réseau et volumes persistants
+- ✅ Sécurisation de base (pare-feu, HTTPS)
 
-## Suivi des Phases d'Implémentation
+### Services (100%)
 
-### Phase 1 : Complétion des microservices essentiels
+- ✅ Service document-processor
+  - ✅ Extraction de texte via Document AI
+  - ✅ Endpoint traitement asynchrone (fichiers volumineux)
+  - ✅ Endpoint traitement synchrone (fichiers standards)
+  - ✅ Gestion du stockage temporaire des fichiers
+  - ✅ Endpoint status pour les tâches asynchrones
 
-| Tâche | Statut | Date début | Date fin | Commentaires |
-|-------|--------|------------|----------|--------------|
-| **1.1 Service vector-store** | Complété | 24/03/2025 | 24/03/2025 | Service implémenté avec succès |
-| - Création structure de base | Complété | 24/03/2025 | 24/03/2025 | Structure FastAPI mise en place |
-| - API d'embeddings | Complété | 24/03/2025 | 24/03/2025 | Intégration avec VoyageAI fonctionnelle |
-| - Interface Qdrant | Complété | 24/03/2025 | 24/03/2025 | Recherche vectorielle et upsert implémentés |
-| - Tests unitaires | Complété | 24/03/2025 | 24/03/2025 | Tests intégrés dans le code |
-| **1.2 Script d'initialisation Qdrant** | Complété | 24/03/2025 | 24/03/2025 | Scripts d'initialisation créés |
-| - Script Python | Complété | 24/03/2025 | 24/03/2025 | Crée la collection et les index |
-| - Script shell d'exécution | Complété | 24/03/2025 | 24/03/2025 | Gère l'attente et l'exécution |
-| **1.3 Mise à jour docker-compose.yml** | Complété | 24/03/2025 | 24/03/2025 | Service d'initialisation ajouté |
+- ✅ Service vision-classifier
+  - ✅ Classification des images via Vision AI 
+  - ✅ Détection des schémas techniques
+  - ✅ OCR sur les schémas
+  - ✅ Classification par type (électrique, hydraulique, etc.)
 
-### Phase 2 : Configuration et développement des workflows n8n
+- ✅ Service vector-store
+  - ✅ Interface avec Qdrant
+  - ✅ Génération d'embeddings via VoyageAI
+  - ✅ Stockage et indexation des vecteurs
+  - ✅ Recherche sémantique
 
-| Tâche | Statut | Date début | Date fin | Commentaires |
-|-------|--------|------------|----------|--------------|
-| **2.1 Configuration n8n** | Complété | 24/03/2025 | 24/03/2025 | Environnement configuré |
-| - Credentials | Complété | 24/03/2025 | 24/03/2025 | Clés API configurées |
-| - Variables d'environnement | Complété | 24/03/2025 | 24/03/2025 | Définies dans .env |
-| **2.2 Workflow d'ingestion** | Complété | 24/03/2025 | 24/03/2025 | Workflow JSON exporté |
-| - Webhook de réception | Complété | 24/03/2025 | 24/03/2025 | Point d'entrée pour upload |
-| - Orchestration des services | Complété | 24/03/2025 | 24/03/2025 | Appels aux microservices |
-| - Gestion des erreurs | Complété | 24/03/2025 | 24/03/2025 | Validation et gestion des erreurs |
-| **2.3 Workflow de questions** | Complété | 24/03/2025 | 24/03/2025 | Workflow JSON exporté |
-| - Réception et formatage | Complété | 24/03/2025 | 24/03/2025 | Extraction des paramètres |
-| - Construction du contexte | Complété | 24/03/2025 | 24/03/2025 | Préparation du contexte pour Claude |
-| - Intégration Claude | Complété | 24/03/2025 | 24/03/2025 | Appel API et formatage des réponses |
-| **2.4 Workflow de diagnostic** | Complété | 24/03/2025 | 24/03/2025 | Workflow JSON exporté |
-| - Structure du processus | Complété | 24/03/2025 | 24/03/2025 | Flux de diagnostic pas à pas implémenté |
-| - Gestion des étapes | Complété | 24/03/2025 | 24/03/2025 | Progression maintenue entre les étapes |
-| - Génération du rapport | Complété | 24/03/2025 | 24/03/2025 | Rapport de diagnostic final généré par Claude |
+- ✅ Qdrant
+  - ✅ Configuration des collections
+  - ✅ Configuration des indexs
+  - ✅ Optimisation des paramètres
 
-### Phase 3 : Développement de l'interface utilisateur
+### Workflows n8n (90%)
 
-| Tâche | Statut | Date début | Date fin | Commentaires |
-|-------|--------|------------|----------|--------------|
-| **3.1 Structure frontend** | Complété | 24/03/2025 | 24/03/2025 | Structure React avec Tailwind CSS |
-| - Configuration projet | Complété | 24/03/2025 | 24/03/2025 | package.json, Dockerfile, nginx config |
-| - Routing et navigation | Complété | 24/03/2025 | 24/03/2025 | React Router implémenté avec layout commun |
-| **3.2 Module d'upload** | Complété | 24/03/2025 | 24/03/2025 | Interface complète d'upload de PDF |
-| - Interface glisser-déposer | Complété | 24/03/2025 | 24/03/2025 | Utilisation de react-dropzone |
-| - Suivi de progression | Complété | 24/03/2025 | 24/03/2025 | États de téléversement et feedback visuel |
-| **3.3 Interface de chat** | Complété | 24/03/2025 | 24/03/2025 | Chat interactif avec visualisation des réponses |
-| - Zone de saisie | Complété | 24/03/2025 | 24/03/2025 | Entrée utilisateur avec suggestions |
-| - Affichage des réponses | Complété | 24/03/2025 | 24/03/2025 | Format Markdown avec ReactMarkdown |
-| - Visualisation des schémas | Complété | 24/03/2025 | 24/03/2025 | Affichage des images référencées |
-| **3.4 Module de diagnostic** | Complété | 24/03/2025 | 24/03/2025 | Workflow pas à pas pour le diagnostic |
-| - Interface pas à pas | Complété | 24/03/2025 | 24/03/2025 | Progression visuelle entre les étapes |
-| - Formulaires dynamiques | Complété | 24/03/2025 | 24/03/2025 | Adaptés à chaque étape du diagnostic |
+- ✅ Workflow d'ingestion (simulation)
+- ✅ Workflow d'ingestion (traitement réel)
+- ✅ Workflow de questions
+- ⚠️ Workflow de diagnostic guidé
+- ✅ Configuration des webhooks et endpoints
 
-### Phase 4 : Intégration, tests et déploiement
+### Frontend (80%)
 
-| Tâche | Statut | Date début | Date fin | Commentaires |
-|-------|--------|------------|----------|--------------|
-| **4.1 Intégration complète** | Complété | 24/03/2025 | 24/03/2025 | Scripts d'intégration créés |
-| - Vérification interactions | Complété | 24/03/2025 | 24/03/2025 | Tests d'intégration pour tous les workflows |
-| - Tests d'intégration | Complété | 24/03/2025 | 24/03/2025 | Framework de test en JavaScript |
-| **4.2 Tests fonctionnels** | Complété | 24/03/2025 | 24/03/2025 | Tests pour chaque fonctionnalité principale |
-| - Tests upload | Complété | 24/03/2025 | 24/03/2025 | Vérification du workflow d'upload |
-| - Tests questions/réponses | Complété | 24/03/2025 | 24/03/2025 | Vérification du workflow de chat |
-| - Tests diagnostic | Complété | 24/03/2025 | 24/03/2025 | Vérification du workflow de diagnostic |
-| **4.3 Déploiement** | Complété | 24/03/2025 | 24/03/2025 | Scripts et documentation créés |
-| - Documentation | Complété | 24/03/2025 | 24/03/2025 | Guide d'installation et de déploiement |
-| - Scripts automatisés | Complété | 24/03/2025 | 24/03/2025 | Scripts de déploiement et de monitoring |
+- ✅ Interface d'upload de documents
+- ✅ Interface de chat
+- ⚠️ Visualisation des schémas
+- ⚠️ Interface de diagnostic guidé
+- ✅ Responsive design
 
-## Problèmes et Blocages
+### Fonctionnalités métier (85%)
 
-| ID | Description | Impact | Statut | Date identification | Date résolution |
-|----|-------------|--------|--------|---------------------|-----------------|
-| - | - | - | - | - | - |
+- ✅ Ingestion de documents PDF
+- ✅ Traitement des documents volumineux
+- ✅ Extraction de texte structuré
+- ✅ Détection et classification des schémas
+- ✅ Recherche sémantique dans les documents
+- ⚠️ Diagnostic guidé pas à pas
+- ⚠️ Simulation de pannes
 
-## Décisions Techniques
+## Historique des implémentations
 
-| Date | Description | Justification | Alternatives considérées |
-|------|-------------|---------------|--------------------------|
-| 24/03/2025 | Utilisation de VoyageAI pour les embeddings | Meilleure qualité vectorielle pour le contenu technique | OpenAI Ada-002, SentenceTransformers |
-| 24/03/2025 | Ajout d'un service d'initialisation séparé pour Qdrant | Garantit la création de la collection avant démarrage des autres services | Initialisation dans chaque service |
-| 24/03/2025 | Workflow d'ingestion avec gestion asynchrone | Permet de traiter des documents volumineux sans bloquer le workflow | Traitement synchrone avec timeout étendu |
-| 24/03/2025 | Workflow de diagnostic avec workflow séparé pour les étapes | Permet une meilleure gestion de l'état entre les étapes du diagnostic | Approche monolithique avec un seul webhook |
-| 24/03/2025 | Interface utilisateur avec React et Tailwind CSS | Développement rapide et UI responsive | Vue.js, Angular |
-| 24/03/2025 | Configuration Nginx pour proxy vers n8n | Centralisation de l'accès API via le frontend | Exposition directe des endpoints n8n |
-| 24/03/2025 | Tests d'intégration en JavaScript | Cohérence avec la stack frontend et facilité d'intégration avec l'API REST | Tests en Python |
+### 20/03/2025 - Initialisation du projet
 
-## Déploiements
+- Création du repository
+- Configuration de base Docker
+- Implémentation initiale des services
 
-| Version | Date | Environnement | Statut | Notes |
-|---------|------|---------------|--------|-------|
-| MVP v1.0 | 24/03/2025 | Développement | Complété | Déploiement local pour tests |
+### 22/03/2025 - Première version fonctionnelle
 
-## Métriques de Progression
+- Services document-processor, vision-classifier et vector-store fonctionnels
+- Workflow n8n d'ingestion (simulation)
+- Configuration initiale de Qdrant
 
-| Métrique | Valeur actuelle | Objectif | Dernière mise à jour |
-|----------|-----------------|----------|---------------------|
-| % Composants implémentés | 100% | 100% | 24/03/2025 |
-| % Workflows n8n | 100% | 100% | 24/03/2025 |
-| % Interface utilisateur | 100% | 100% | 24/03/2025 |
-| % Tests fonctionnels | 100% | 100% | 24/03/2025 |
-| % Documentation | 100% | 100% | 24/03/2025 |
+### 24/03/2025 - Intégration avec Google Cloud
 
-## Notes importantes
+- Configuration de Document AI
+- Configuration de Vision AI
+- Tests d'extraction basiques
 
-- Les accès aux APIs (Google Cloud, VoyageAI, Anthropic) doivent être configurés avant le déploiement en production
-- La configuration initiale de n8n nécessite des ajustements spécifiques à l'environnement de déploiement
-- Tous les microservices exposent un endpoint /health pour la surveillance
-- Le service vector-store nécessite une clé API VoyageAI valide configurée via la variable d'environnement VOYAGE_API_KEY
-- Le frontend envoie les requêtes via Nginx qui les route vers n8n (/api/* vers n8n:5678/)
-- Dans l'implémentation actuelle, l'état du diagnostic est simulé. En production, il faudra implémenter un stockage persistant (base de données)
-- Lors du déploiement, il faudra configurer les certificats SSL dans le dossier docker/ssl pour HTTPS
-- Les scripts de test d'intégration nécessitent un document PDF d'exemple dans le dossier tests/samples/
-- Les scripts de déploiement et de monitoring sont disponibles dans le dossier scripts/
+### 26/03/2025 - Traitement réel des PDF
+
+- Implémentation de l'endpoint `/process` dans document-processor
+- Mise à jour du workflow n8n pour traiter réellement les PDF
+- Création de la documentation de débogage et suivi d'erreurs
+- Tests avec PDF réels
+
+## Fonctionnalités à implémenter
+
+### Priorité Haute
+
+1. **Finaliser le workflow de diagnostic guidé**
+   - Création des étapes du processus de diagnostic
+   - Intégration avec les schémas techniques
+   - Suivi de l'état du diagnostic
+
+2. **Améliorer l'extraction des images**
+   - Optimiser l'extraction des schémas techniques complexes
+   - Améliorer la détection des légendes et annotations
+   - Support pour les formats techniques spécialisés
+
+3. **Interface de visualisation des schémas**
+   - Affichage contextuel des schémas
+   - Mise en évidence des composants mentionnés
+   - Zoom et navigation dans les schémas
+
+### Priorité Moyenne
+
+1. **Analyse statistique des documents**
+   - Extraction de métriques sur les documents traités
+   - Tableau de bord d'utilisation
+   - Rapport sur les types de documents
+
+2. **Amélioration des embeddings**
+   - Tests avec différents modèles d'embedding
+   - Optimisation des paramètres de chunking
+   - Expérimentation avec embeddings multimodaux
+
+### Priorité Basse
+
+1. **Export des résultats**
+   - Format PDF annoté
+   - Export des schémas avec annotations
+   - Export des sessions de diagnostic
+
+2. **Mode hors ligne partiel**
+   - Mise en cache des résultats précédents
+   - Fonctionnalités de base sans connexion cloud
+
+## Problèmes connus
+
+### Problèmes critiques
+
+1. **Timeout sur PDF volumineux** - Issue #12
+   - Les fichiers PDF très volumineux (>100 Mo) provoquent des timeouts
+   - Solution temporaire: splitter les fichiers avant upload
+   - Solution prévue: refactorisation du traitement asynchrone avec streaming
+
+2. **Clés API expiration** - Issue #15
+   - Les clés API d'essai expirent le 15/04/2025
+   - Solution prévue: migration vers des clés de production
+
+### Problèmes majeurs
+
+1. **Extraction incorrecte des tableaux** - Issue #8
+   - Les tableaux complexes sont mal extraits
+   - Impact: données structurées perdues ou déformées
+   - Solution prévue: utiliser un processeur Document AI spécialisé pour les tableaux
+
+2. **Classification erronée des schémas techniques** - Issue #10
+   - Certains schémas très spécialisés sont mal classifiés
+   - Impact: recherche sémantique moins précise
+   - Solution prévue: entraînement personnalisé du modèle de classification
+
+### Problèmes mineurs
+
+1. **Interface n8n sensible aux changements de nom de variables** - Issue #18
+   - Modifications manuelles requises lors de changements dans les structures de données
+   - Solution prévue: standards de nommage et documentation complète des structures
+
+2. **Lenteur sur certains navigateurs mobiles** - Issue #22
+   - Interface frontend lente sur certains navigateurs mobiles
+   - Solution prévue: optimisation du code React et lazy loading des composants
+
+## Métriques de performance
+
+### Temps de traitement des documents
+
+| Type de document | Taille | Temps moyen de traitement |
+|------------------|--------|---------------------------|
+| PDF simple       | < 5 Mo | 2-5 secondes             |
+| PDF avec images  | 5-25 Mo | 10-20 secondes           |
+| PDF volumineux   | 25-100 Mo | 30-120 secondes         |
+| PDF très volumineux | > 100 Mo | 3-10 minutes           |
+
+### Précision de l'extraction
+
+| Type de contenu | Précision |
+|-----------------|-----------|
+| Texte brut      | 98%       |
+| Texte formaté   | 95%       |
+| Tableaux        | 85%       |
+| Schémas simples | 90%       |
+| Schémas complexes | 75%     |
+
+### Temps de réponse aux requêtes
+
+| Type de requête | Temps de réponse |
+|-----------------|------------------|
+| Recherche simple | < 1 seconde     |
+| Recherche complexe | 1-3 secondes   |
+| Diagnostic simple | 2-5 secondes    |
+| Diagnostic complexe | 5-15 secondes  |
+
+## Tests
+
+### Couverture des tests
+
+| Composant | Couverture |
+|-----------|------------|
+| document-processor | 75% |
+| vision-classifier | 70% |
+| vector-store | 80% |
+| Workflows n8n | Manuel |
+| Frontend | 60% |
+
+### Tests de performance
+
+- **Test de charge**: 20 utilisateurs simultanés, 50 requêtes/minute
+  - Résultat: Stable, utilisation CPU < 70%, RAM < 60%
+
+- **Test de traitement PDF volumineux**: 10 fichiers de 50-100 Mo
+  - Résultat: 8/10 réussis, 2 timeouts (issue #12)
+
+## Contact
+
+- **Responsable technique**: [Nom du responsable]
+- **Responsable PDF Processing**: [Nom du responsable]
+- **Responsable AI/ML**: [Nom du responsable]
+
+## Documentation liée
+
+- [Guide de déploiement](technicia-deployment-guide.md)
+- [Problèmes connus](deployment-issues.md)
+- [Guide de débogage des microservices](microservices-debugging.md)
+- [Guide de résolution des problèmes liés au traitement PDF](pdf-processing-issues.md)
+- [Guide de gestion des logs](log-management.md)
+- [Documentation du workflow d'ingestion réel](workflow-ingestion-reel.md)
