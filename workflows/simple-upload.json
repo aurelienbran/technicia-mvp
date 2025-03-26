@@ -1,0 +1,106 @@
+{
+  "name": "Simple Upload Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "upload",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryData": true,
+          "bodyContentType": "multipart-form-data"
+        },
+        "httpMethod": "POST"
+      },
+      "name": "Document Upload Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "simple-upload"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Logging des informations sur le fichier reçu\nconst binaryData = $input.item.binary;\nconst result = {};\n\ntry {\n  // Vérifier si des données binaires sont présentes\n  if (!binaryData) {\n    throw new Error('Aucune donnée binaire reçue');\n  }\n  \n  // Récupérer le nom de la propriété binaire\n  const propertyName = Object.keys(binaryData)[0];\n  if (!propertyName) {\n    throw new Error('Aucune propriété binaire trouvée');\n  }\n  \n  // Extraire les informations sur le fichier\n  const fileData = binaryData[propertyName];\n  \n  // Logging détaillé pour débogage\n  console.log('Fichier reçu:');\n  console.log(`- Nom: ${fileData.fileName || 'inconnu'}`);\n  console.log(`- Type MIME: ${fileData.mimeType || 'inconnu'}`);\n  console.log(`- Taille: ${fileData.fileSize || 0} octets`);\n  console.log(`- Propriété binaire: ${propertyName}`);\n  \n  // Retourner les informations sur le fichier\n  result.success = true;\n  result.fileName = fileData.fileName;\n  result.fileSize = fileData.fileSize;\n  result.mimeType = fileData.mimeType;\n  result.binaryPropertyName = propertyName;\n  result.timestamp = new Date().toISOString();\n} catch (error) {\n  console.error('Erreur:', error.message);\n  \n  result.success = false;\n  result.error = error.message;\n}\n\nreturn result;"
+      },
+      "name": "Log File Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://technicia-document-processor:8000/process",
+        "method": "POST",
+        "sendBinaryData": true,
+        "binaryPropertyName": "={{ $json.binaryPropertyName }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 60000
+        }
+      },
+      "name": "Process PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify($json, null, 2) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "name": "Return Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        780,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Document Upload Webhook": {
+      "main": [
+        [
+          {
+            "node": "Log File Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log File Info": {
+      "main": [
+        [
+          {
+            "node": "Process PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process PDF": {
+      "main": [
+        [
+          {
+            "node": "Return Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}
