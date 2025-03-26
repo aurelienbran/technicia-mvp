@@ -1,118 +1,143 @@
-# Problèmes de déploiement - TechnicIA MVP
+# Problèmes connus lors du déploiement de TechnicIA MVP
 
-Ce document répertorie les problèmes rencontrés lors du déploiement de TechnicIA MVP, ainsi que leurs solutions ou contournements.
+Ce document répertorie les problèmes fréquemment rencontrés lors du déploiement et de l'utilisation de TechnicIA MVP, ainsi que leurs solutions.
 
-## Problèmes résolus
+## Problèmes de construction et déploiement
 
-### 1. Fichiers manquants suite au commit d8619ad
+### Problème avec le Dockerfile du frontend
 
-**Date :** 24/03/2025
+**Symptôme**: Lors de la construction du frontend, une erreur apparaît :
+```
+npm ERR! Couldn't find npm-shrinkwrap.json or package-lock.json
+```
 
-**Description :** Le commit d8619ad, censé corriger l'erreur de clonage du repository et mettre à jour l'installation de Docker, a accidentellement effacé plusieurs scripts importants:
-- `scripts/installer.sh`
-- `scripts/setup-qdrant.sh`
-- `scripts/setup-n8n.sh`
+**Cause**: Le Dockerfile du frontend utilise `npm ci` qui nécessite un fichier package-lock.json qui n'est pas présent dans le repository.
 
-**Solution :** Les fichiers ont été restaurés par trois commits successifs:
-- Commit 527ab4aa4fcf4bcc3b3e5912bf9ee01797d1da8e: Restauration de installer.sh
-- Commit 9a71c67d2a198761f5f0ca15e2663c15f3d375a1: Restauration de setup-qdrant.sh
-- Commit 724f3b1ed72f67d0af6658347836ac29a444b9c0: Restauration de setup-n8n.sh
+**Solution**: Modifiez le Dockerfile du frontend pour utiliser `npm install` à la place de `npm ci`:
 
-**Notes :** À l'avenir, il est recommandé d'utiliser `git add <fichier>` pour ajouter spécifiquement les fichiers modifiés, plutôt que `git add .` qui peut entraîner l'inclusion accidentelle de suppressions non intentionnelles.
+```diff
+- RUN npm ci
++ RUN npm install
+```
+Le script de déploiement automatisé (`deploy.sh`) effectue cette modification automatiquement.
 
-### 2. Erreur de syntaxe dans le script deploy.sh
+### Structure incomplète du frontend
 
-**Date :** 24/03/2025
+**Symptôme**: Erreur lors de la construction du frontend indiquant que le fichier `public/index.html` est manquant.
 
-**Description :** Une erreur de syntaxe a été détectée à la ligne 48 du script deploy.sh, probablement liée à une structure conditionnelle mal formée.
+**Cause**: Le repository peut ne pas inclure tous les fichiers nécessaires pour la structure du frontend React.
 
-**Solution :** Le script a été vérifié et corrigé dans le commit e885fa450012d20294596685483cb4f5a3b52395.
+**Solution**: Créez manuellement la structure minimale requise, ou utilisez le script de déploiement automatisé qui génère cette structure.
 
-**Notes :** Il est recommandé d'utiliser des outils comme ShellCheck pour valider la syntaxe des scripts bash avant de les committer.
+```bash
+mkdir -p /opt/technicia/frontend/public
+echo '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TechnicIA</title></head><body><div id="root"></div></body></html>' > /opt/technicia/frontend/public/index.html
+```
 
-### 3. Problème avec le Dockerfile du frontend - Absence de package-lock.json
+### Variables d'environnement non chargées
 
-**Date :** 25/03/2025
+**Symptôme**: Docker Compose affiche des avertissements sur les variables d'environnement non définies lors du démarrage des services.
 
-**Description :** Le Dockerfile du frontend utilise `npm ci` qui nécessite un fichier `package-lock.json`. Ce fichier n'existe pas dans le répertoire frontend, ce qui cause l'échec de la construction.
+**Cause**: Le fichier `.env` n'est pas correctement placé ou exporté.
 
-**Solution :** Modification du Dockerfile pour utiliser `npm install` à la place de `npm ci`, ce qui permet l'installation des dépendances sans nécessiter de fichier `package-lock.json`.
+**Solution**: Assurez-vous que le fichier `.env` est copié dans le répertoire `docker/` et que les variables sont exportées avant de lancer Docker Compose.
 
-**Notes :** Pour une installation déterministe en production, il est recommandé de générer et versionner un fichier `package-lock.json`. Pour le MVP, `npm install` est suffisant.
+```bash
+cp /opt/technicia/.env /opt/technicia/docker/.env
+cd /opt/technicia/docker
+export $(grep -v '^#' .env | xargs)
+docker compose up -d
+```
 
-### 4. Structure incomplète du frontend - Absence du répertoire public
+## Problèmes de configuration des webhooks n8n
 
-**Date :** 25/03/2025
+### Webhook d'upload de document non fonctionnel
 
-**Description :** Le répertoire `public` avec le fichier `index.html` manquait dans le projet frontend, ce qui provoquait l'échec de la construction de l'application React.
+**Symptôme**: Impossible de téléverser des fichiers PDF via l'interface utilisateur, le webhook ne reçoit pas les fichiers.
 
-**Solution :** Ajout d'un répertoire `public` avec un fichier `index.html` minimal nécessaire à la construction de l'application React.
+**Cause**: Mauvaise configuration du webhook dans n8n, notamment utilisation de la méthode HTTP GET au lieu de POST, ou absence de configuration pour le traitement des données binaires.
 
-**Notes :** Pour les futures versions, une vérification de structure complète devrait être effectuée avant de committer un projet React.
+**Solution**: 
+1. Modifiez la configuration du webhook d'upload de documents dans n8n:
+   - Changez la méthode HTTP en POST
+   - Activez l'option "Raw Body" et définissez "Body Content Type" à "multipart-form-data"
 
-### 5. Script de déploiement réinitialisant les modifications locales
+2. Consultez le guide détaillé [webhook-troubleshooting.md](webhook-troubleshooting.md) pour des instructions complètes.
 
-**Date :** 25/03/2025
+## Problèmes de connexion aux services externes
 
-**Description :** Le script `deploy.sh` exécute `git reset --hard origin/main`, ce qui supprime toutes les modifications locales, y compris les correctifs ou configurations personnalisées.
+### Erreur d'authentification avec Google Cloud
 
-**Solution :** 
-1. Création d'un script `apply-patches.sh` qui applique automatiquement les correctifs nécessaires après la mise à jour du code.
-2. Modification du script `deploy.sh` pour préserver les fichiers modifiés importants et appeler le script de correctifs.
+**Symptôme**: Les services Document AI ou Vision AI échouent avec des erreurs d'authentification.
 
-**Notes :** Cette approche permet de maintenir un équilibre entre l'obtention des dernières mises à jour et la préservation des configurations locales.
+**Cause**: Le fichier de credentials Google Cloud est manquant, mal placé ou n'a pas les permissions adéquates.
 
-## Problèmes en cours
+**Solution**: 
+1. Vérifiez que le fichier d'identifiants se trouve dans `/opt/technicia/docker/credentials/google-credentials.json`
+2. Vérifiez les permissions du fichier : `chmod 600 /opt/technicia/docker/credentials/google-credentials.json`
+3. Confirmez que le fichier d'identifiants a accès aux services Document AI et Vision AI
 
-### 1. Erreur CORS lors des appels API depuis le frontend
+### Erreur d'authentification avec Anthropic (Claude)
 
-**Date :** 24/03/2025
+**Symptôme**: Le service de chat ne fonctionne pas correctement, avec des erreurs d'authentification Anthropic.
 
-**Description :** Lors des tests d'intégration, des erreurs CORS (Cross-Origin Resource Sharing) ont été détectées lorsque le frontend essaie de communiquer avec les services backend.
+**Cause**: Clé API manquante ou invalide pour Anthropic.
 
-**Investigation en cours :** 
-- Vérifier la configuration CORS dans les microservices FastAPI
-- S'assurer que tous les services sont sur le même réseau Docker
-- Configurer correctement les en-têtes dans le service de proxy (Nginx)
+**Solution**: 
+1. Vérifiez que la variable `ANTHROPIC_API_KEY` est correctement définie dans le fichier `.env`
+2. Assurez-vous que la clé API a un format valide et dispose des permissions pour accéder à Claude 3.5 Sonnet
 
-**Contournement temporaire :** Pour les tests de développement, un plugin CORS a été installé dans le navigateur pour ignorer ces erreurs.
+### Erreur avec VoyageAI
 
-### 2. Problème de performance avec les documents volumineux
+**Symptôme**: Les embeddings échouent ou ne sont pas générés correctement.
 
-**Date :** 24/03/2025
+**Cause**: Clé API manquante ou invalide pour VoyageAI.
 
-**Description :** Les documents PDF dépassant 50 Mo prennent beaucoup de temps à être traités, et le service document-processor peut parfois se bloquer.
+**Solution**:
+1. Vérifiez que la variable `VOYAGE_API_KEY` est correctement définie dans le fichier `.env`
+2. Vérifiez les quotas disponibles sur votre compte VoyageAI
 
-**Investigation en cours :**
-- Optimiser le processus d'extraction pour gérer les documents par lots
-- Implémenter un mécanisme de file d'attente pour éviter la surcharge
-- Explorer la possibilité de paralléliser le traitement des pages
+## Problèmes de performance
 
-**Contournement temporaire :** Limiter la taille des documents à 30 Mo pour les démonstrations, et prétraiter les documents plus volumineux manuellement.
+### Traitement lent des documents volumineux
 
-### 3. Variables d'environnement non chargées correctement
+**Symptôme**: Le traitement des documents PDF volumineux (>50 Mo) est extrêmement lent ou échoue.
 
-**Date :** 25/03/2025
+**Cause**: Ressources Docker limitées ou timeouts dans les services.
 
-**Description :** Malgré la présence du fichier `.env`, Docker Compose affiche des avertissements indiquant que les variables d'environnement ne sont pas définies. Cela suggère un problème de chargement des variables d'environnement.
+**Solution**:
+1. Augmentez les ressources allouées à Docker (mémoire, CPU)
+2. Augmentez les timeouts dans les services concernés (document-processor, n8n)
+3. Pour les documents très volumineux, envisagez de les diviser en plusieurs fichiers plus petits
 
-**Investigation en cours :**
-- Vérifier le format du fichier `.env` et s'assurer qu'il est correctement situé
-- Tester différentes méthodes de chargement des variables d'environnement
-- Ajouter des logs supplémentaires pour diagnostiquer le problème de chargement
+### n8n est lent ou se bloque
 
-**Contournement temporaire :** Définir manuellement les variables d'environnement dans le terminal avant d'exécuter Docker Compose.
+**Symptôme**: L'interface n8n devient lente, se bloque ou certains workflows échouent.
 
-## Problèmes potentiels à surveiller
+**Cause**: Ressources insuffisantes ou trop d'exécutions simultanées.
 
-### 1. Consommation élevée de mémoire par Qdrant
+**Solution**:
+1. Augmentez les ressources allouées au conteneur n8n
+2. Ajustez les paramètres de concurrence dans n8n (réduisez le nombre d'exécutions simultanées)
+3. Nettoyez régulièrement l'historique d'exécution de n8n
 
-**Description :** Lors des tests avec de grandes quantités de données, Qdrant peut consommer une quantité importante de mémoire, potentiellement jusqu'à 4 Go.
+## Problèmes de réseau
 
-**Solution préventive :** Configurer la limite de mémoire dans docker-compose.yml et surveiller l'utilisation des ressources. Adapter la configuration de Qdrant (segments, optimiseurs) en fonction de la charge.
+### Échec de connexion entre les services
 
-### 2. Expiration des tokens d'API Google Cloud
+**Symptôme**: Certains services ne peuvent pas communiquer entre eux, par exemple Document Processor ne peut pas appeler Vector Store.
 
-**Description :** Les tokens d'authentification pour Google Cloud ont une durée de validité limitée, ce qui pourrait causer des interruptions de service.
+**Cause**: Problèmes avec le réseau Docker ou les noms d'hôte.
 
-**Solution préventive :** Mettre en place un mécanisme de rafraîchissement automatique des tokens et une surveillance qui alerte lorsque les tokens approchent de leur expiration.
+**Solution**:
+1. Vérifiez que tous les services sont sur le même réseau Docker
+2. Vérifiez que les services utilisent les noms d'hôte corrects (comme définis dans docker-compose.yml)
+3. Testez la connectivité : `docker exec technicia-n8n ping document-processor`
+
+## Conclusion
+
+Si vous rencontrez un problème qui n'est pas répertorié ici, vérifiez les logs des services pour obtenir plus de détails et essayez de diagnostiquer le problème spécifique. N'hésitez pas à consulter les ressources suivantes pour des instructions supplémentaires:
+
+- [Guide Complet de Déploiement](technicia-deployment-guide.md)
+- [Guide de Configuration n8n](n8n-config-guide.md)
+- [Guide de Dépannage des Webhooks](webhook-troubleshooting.md)
