@@ -5,7 +5,11 @@
       "parameters": {
         "path": "upload",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "rawBody": true,
+          "bodyContentType": "multipart-form-data"
+        },
+        "httpMethod": "POST"
       },
       "name": "Document Upload Webhook",
       "type": "n8n-nodes-base.webhook",
