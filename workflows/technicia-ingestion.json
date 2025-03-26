@@ -577,6 +577,30 @@
         2640,
         260
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Journalisation pour le point terminal du workflow\n// Ce nœud n'a qu'un objectif de clarté visuelle dans le workflow\n\nconsole.log('Workflow d\\'ingestion terminé - point terminal atteint');\n\nreturn {\n  workflow_completed: true,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "name": "Workflow Endpoint",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2800,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Noeud créant un lien entre les voies du workflow\n// Permet de stocker le documentId et d'autres informations clés en cas d'erreur\n\n// Récupérer le contexte depuis la validation du document\nconst documentContext = {\n  document_id: $node[\"Validate Document\"].json.document_id,\n  document_name: $node[\"Validate Document\"].json.document_name,\n  document_size: $node[\"Validate Document\"].json.document_size,\n  large_document: $node[\"Validate Document\"].json.large_document,\n  timestamp: new Date().toISOString()\n};\n\n// Log d'information\nconsole.log('Document contexte sauvegardé pour traitement par lot:', JSON.stringify(documentContext, null, 2));\n\n// Retourner les informations contextuelles\nreturn documentContext;"
+      },
+      "name": "Save Document Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        500
+      ]
     }
   ],
   "connections": {
@@ -625,6 +649,11 @@
         [
           {
             "node": "Is Large Document?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save Document Context",
             "type": "main",
             "index": 0
           }
@@ -917,6 +946,22 @@
             "index": 0
           }
         ]
+      ]
+    },
+    "Finalize Process": {
+      "main": [
+        [
+          {
+            "node": "Workflow Endpoint",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Document Context": {
+      "main": [
+        []
       ]
     }
   },
