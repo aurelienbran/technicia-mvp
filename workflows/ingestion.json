@@ -18,7 +18,7 @@
         240,
         300
       ],
-      "webhookId": "document-upload"
+      "webhookId": "upload"
     },
     {
       "parameters": {
