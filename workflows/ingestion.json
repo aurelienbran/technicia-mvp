@@ -202,7 +202,7 @@
         "bodyParametersUi": {
           "parameter": []
         },
-        "jsonBody": "={{ { text: $('Process Data for Vectorization').item.json.text_chunks[0].text, metadata: { document_name: $('Process Data for Vectorization').item.json.document_name, page_number: $('Process Data for Vectorization').item.json.text_chunks[0].page_number } } }}"
+        "jsonBody": "={{ { text: $json.text_chunks[0].text, metadata: { document_name: $json.document_name, page_number: $json.text_chunks[0].page_number } } }}"
       },
       "name": "Vectorize Text Chunks",
       "type": "n8n-nodes-base.httpRequest",
@@ -221,7 +221,7 @@
         "options": {
           "allowUnauthorizedCerts": true
         },
-        "jsonBody": "={{ { image_url: $('Process Data for Vectorization').item.json.images[0].image_url, metadata: { document_name: $('Process Data for Vectorization').item.json.document_name, page_number: $('Process Data for Vectorization').item.json.images[0].page_number, schema_type: $('Process Data for Vectorization').item.json.images[0].schema_type, detected_text: $('Process Data for Vectorization').item.json.images[0].detected_text } } }}"
+        "jsonBody": "={{ { image_url: $json.images[0].image_url, metadata: { document_name: $json.document_name, page_number: $json.images[0].page_number, schema_type: $json.images[0].schema_type, detected_text: $json.images[0].detected_text } } }}"
       },
       "name": "Vectorize Images",
       "type": "n8n-nodes-base.httpRequest",
@@ -233,7 +233,7 @@
     },
     {
       "parameters": {
-        "content": "={{ { success: true, document_name: $('Process Data for Vectorization').item.json.document_name, message: 'Document processed successfully', text_chunks_count: $('Process Data for Vectorization').item.json.text_chunks.length, images_count: $('Process Data for Vectorization').item.json.images.length } }}",
+        "content": "={{ { success: true, document_name: $json.document_name, message: 'Document processed successfully', text_chunks_count: $json.text_chunks ? $json.text_chunks.length : 0, images_count: $json.images ? $json.images.length : 0 } }}",
         "options": {}
       },
       "name": "Return Success Response",
