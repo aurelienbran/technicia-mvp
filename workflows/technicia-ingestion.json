@@ -22,14 +22,148 @@
     },
     {
       "parameters": {
-        "jsCode": "// Version ultra-simplifiée sans validation\n// Convertit simplement l'input en un objet de réponse compatible avec le frontend\n\n// Log complet de l'entrée pour débogage\nconsole.log('Structure complète de l\\'entrée:', JSON.stringify($input, null, 2));\n\n// Déterminer si des données binaires sont présentes\nlet hasBinaryData = false;\nlet fileName = 'document.pdf';\nlet fileSize = 0;\n\nif ($input.item && $input.item.binary) {\n  const binaryProperties = Object.keys($input.item.binary);\n  if (binaryProperties.length > 0) {\n    hasBinaryData = true;\n    const firstProperty = binaryProperties[0];\n    console.log('Propriété binaire trouvée:', firstProperty);\n    \n    const fileData = $input.item.binary[firstProperty];\n    if (fileData) {\n      fileName = fileData.fileName || fileName;\n      fileSize = fileData.fileSize || fileSize;\n      console.log('Fichier trouvé:', fileName, '(', fileSize, 'octets )');\n    }\n  }\n}\n\n// Créer une réponse simulée qui correspond exactement à ce que le frontend attend\nconst result = {\n  success: true,\n  document_id: 'doc-' + Date.now(),\n  document_name: fileName,\n  text_chunks_count: 12,\n  images_count: 5,\n  processing_type: 'simulated'\n};\n\n// Log final\nconsole.log('Réponse finale:', JSON.stringify(result, null, 2));\n\nreturn result;"
+        "jsCode": "// Vérification et validation du fichier PDF\n// Analyse les données binaires et vérifie la taille maximale\n\n// Log complet de l'entrée pour débogage\nconsole.log('Structure complète de l\\'entrée:', JSON.stringify($input, null, 2));\n\n// Déterminer si des données binaires sont présentes\nlet hasBinaryData = false;\nlet fileName = 'document.pdf';\nlet fileSize = 0;\nlet fileType = '';\nlet fileMimeType = '';\nlet errors = [];\n\nif ($input.item && $input.item.binary) {\n  const binaryProperties = Object.keys($input.item.binary);\n  if (binaryProperties.length > 0) {\n    hasBinaryData = true;\n    const firstProperty = binaryProperties[0];\n    console.log('Propriété binaire trouvée:', firstProperty);\n    \n    const fileData = $input.item.binary[firstProperty];\n    if (fileData) {\n      fileName = fileData.fileName || fileName;\n      fileSize = fileData.fileSize || fileSize;\n      fileMimeType = fileData.mimeType || '';\n      console.log('Fichier trouvé:', fileName, '(', fileSize, 'octets )', 'Type:', fileMimeType);\n      \n      // Vérifier si c'est un PDF\n      if (fileMimeType !== 'application/pdf') {\n        errors.push('Le fichier doit être au format PDF');\n      }\n      \n      // Vérifier la taille maximale (150 Mo)\n      const MAX_SIZE = 150 * 1024 * 1024; // 150 Mo en octets\n      if (fileSize > MAX_SIZE) {\n        errors.push(`Le fichier est trop volumineux (${Math.round(fileSize / (1024 * 1024))} Mo). Maximum autorisé: 150 Mo`);\n      }\n    }\n  } else {\n    errors.push('Aucune donnée binaire trouvée');\n  }\n} else {\n  errors.push('Aucun fichier n\\'a été téléchargé');\n}\n\n// Préparer l'objet de sortie avec les métadonnées\nconst output = {\n  success: errors.length === 0,\n  errors: errors,\n  document_id: hasBinaryData ? 'doc-' + Date.now() : null,\n  document_name: fileName,\n  document_size: fileSize,\n  document_type: fileMimeType,\n  processing_status: errors.length === 0 ? 'ready_for_extraction' : 'rejected',\n  large_document: fileSize > 25 * 1024 * 1024 // Marquer les documents > 25 Mo comme \"larges\"\n};\n\n// Log final\nconsole.log('Résultat de la validation:', JSON.stringify(output, null, 2));\n\nreturn output;"
       },
-      "name": "Generate Response",
+      "name": "Validate Document",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
         420,
         300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.success }}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "name": "Document Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionName": "writeBinaryFile",
+        "fileName": "={{ $json.document_id + '/' + $json.document_name }}",
+        "fileContent": "={{ $binary.data }}"
+      },
+      "name": "Store Document",
+      "type": "n8n-nodes-base.executeFunction",
+      "typeVersion": 1,
+      "position": [
+        780,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.large_document }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Is Large Document?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        960,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://document-processor:5001/process",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "document_path",
+              "value": "={{ $json.document_id + '/' + $json.document_name }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Call Large Document Service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1140,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://document-processor:5000/extract",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "document_path",
+              "value": "={{ $json.document_id + '/' + $json.document_name }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Process with Document AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1140,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify({success: false, errors: $json.errors}) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "name": "Return Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        780,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combiner les informations et retourner une réponse cohérente\n\n// Récupérer les infos du document\nconst documentInfo = {\n  document_id: $json.document_id,\n  document_name: $json.document_name,\n  document_size: $json.document_size,\n  processing_type: $json.large_document ? 'large_document' : 'standard'\n};\n\n// Ajouter des informations sur le traitement (pour le moment simulées)\nconst processingInfo = {\n  text_chunks_count: Math.floor(Math.random() * 20) + 5,\n  images_count: Math.floor(Math.random() * 10) + 1,\n  status: 'processing',\n  estimated_completion: new Date(Date.now() + 60000).toISOString() // +1 min\n};\n\n// Préparer la réponse finale\nconst result = {\n  success: true,\n  ...documentInfo,\n  ...processingInfo\n};\n\nconsole.log('Réponse finale:', JSON.stringify(result, null, 2));\n\nreturn result;"
+      },
+      "name": "Prepare Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        220
       ]
     },
     {
@@ -43,8 +177,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        600,
-        300
+        1500,
+        220
       ]
     }
   ],
@@ -53,14 +187,94 @@
       "main": [
         [
           {
-            "node": "Generate Response",
+            "node": "Validate Document",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Generate Response": {
+    "Validate Document": {
+      "main": [
+        [
+          {
+            "node": "Document Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Valid?": {
+      "main": [
+        [
+          {
+            "node": "Store Document",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Document": {
+      "main": [
+        [
+          {
+            "node": "Is Large Document?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Large Document?": {
+      "main": [
+        [
+          {
+            "node": "Call Large Document Service",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Process with Document AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Large Document Service": {
+      "main": [
+        [
+          {
+            "node": "Prepare Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process with Document AI": {
+      "main": [
+        [
+          {
+            "node": "Prepare Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Response": {
       "main": [
         [
           {
