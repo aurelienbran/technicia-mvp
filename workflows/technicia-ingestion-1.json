@@ -44,6 +44,13 @@
       "position": [600, 300]
     },
     {
+      "parameters": {},
+      "name": "No Operation",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [780, 200]
+    },
+    {
       "parameters": {
         "functionName": "writeBinaryFile",
         "fileName": "={{ $json.document_id + '/' + $json.document_name }}",
@@ -52,7 +59,7 @@
       "name": "Store Document",
       "type": "n8n-nodes-base.executeFunction",
       "typeVersion": 1,
-      "position": [780, 200]
+      "position": [960, 100]
     },
     {
       "parameters": {
@@ -61,7 +68,7 @@
       "name": "Prepare Response Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [780, 300]
+      "position": [960, 300]
     },
     {
       "parameters": {
@@ -77,7 +84,7 @@
       "name": "Document Size Router",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [960, 220]
+      "position": [1140, 100]
     },
     {
       "parameters": {
@@ -105,7 +112,7 @@
       "name": "Send to Large Document Processing",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1140, 160],
+      "position": [1320, 40],
       "continueOnFail": true
     },
     {
@@ -134,7 +141,7 @@
       "name": "Send to Standard Processing",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1140, 280],
+      "position": [1320, 160],
       "continueOnFail": true
     },
     {
@@ -159,7 +166,7 @@
       "name": "Return Initial Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1320, 300]
+      "position": [1200, 300]
     },
     {
       "parameters": {
@@ -214,11 +221,18 @@
     "Document Valid?": {
       "main": [
         [
-          {"node": "Store Document", "type": "main", "index": 0},
-          {"node": "Prepare Response Data", "type": "main", "index": 0}
+          {"node": "No Operation", "type": "main", "index": 0}
         ],
         [
           {"node": "Return Validation Error", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "No Operation": {
+      "main": [
+        [
+          {"node": "Store Document", "type": "main", "index": 0},
+          {"node": "Prepare Response Data", "type": "main", "index": 0}
         ]
       ]
     },
@@ -244,16 +258,6 @@
         [
           {"node": "Send to Standard Processing", "type": "main", "index": 0}
         ]
-      ]
-    },
-    "Send to Large Document Processing": {
-      "main": [
-        []
-      ]
-    },
-    "Send to Standard Processing": {
-      "main": [
-        []
       ]
     },
     "Health Check Endpoint": {
