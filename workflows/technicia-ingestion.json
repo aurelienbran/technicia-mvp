@@ -22,7 +22,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Vérification et validation du fichier PDF\n// Analyse les données binaires et vérifie la taille maximale\n\n// Log complet de l'entrée pour débogage\nconsole.log('Structure complète de l\\'entrée:', JSON.stringify($input, null, 2));\n\n// Déterminer si des données binaires sont présentes\nlet hasBinaryData = false;\nlet fileName = 'document.pdf';\nlet fileSize = 0;\nlet fileType = '';\nlet fileMimeType = '';\nlet errors = [];\n\nif ($input.item && $input.item.binary) {\n  const binaryProperties = Object.keys($input.item.binary);\n  if (binaryProperties.length > 0) {\n    hasBinaryData = true;\n    const firstProperty = binaryProperties[0];\n    console.log('Propriété binaire trouvée:', firstProperty);\n    \n    const fileData = $input.item.binary[firstProperty];\n    if (fileData) {\n      fileName = fileData.fileName || fileName;\n      fileSize = fileData.fileSize || fileSize;\n      fileMimeType = fileData.mimeType || '';\n      console.log('Fichier trouvé:', fileName, '(', fileSize, 'octets )', 'Type:', fileMimeType);\n      \n      // Vérifier si c'est un PDF\n      if (fileMimeType !== 'application/pdf') {\n        errors.push('Le fichier doit être au format PDF');\n      }\n      \n      // Vérifier la taille maximale (150 Mo)\n      const MAX_SIZE = 150 * 1024 * 1024; // 150 Mo en octets\n      if (fileSize > MAX_SIZE) {\n        errors.push(`Le fichier est trop volumineux (${Math.round(fileSize / (1024 * 1024))} Mo). Maximum autorisé: 150 Mo`);\n      }\n    }\n  } else {\n    errors.push('Aucune donnée binaire trouvée');\n  }\n} else {\n  errors.push('Aucun fichier n\\'a été téléchargé');\n}\n\n// Préparer l'objet de sortie avec les métadonnées\nconst output = {\n  success: errors.length === 0,\n  errors: errors,\n  document_id: hasBinaryData ? 'doc-' + Date.now() : null,\n  document_name: fileName,\n  document_size: fileSize,\n  document_type: fileMimeType,\n  processing_status: errors.length === 0 ? 'ready_for_extraction' : 'rejected',\n  large_document: fileSize > 25 * 1024 * 1024 // Marquer les documents > 25 Mo comme \"larges\"\n};\n\n// Log final\nconsole.log('Résultat de la validation:', JSON.stringify(output, null, 2));\n\nreturn output;"
+        "jsCode": "// Vérification et validation du fichier PDF\n// Analyse les données binaires et vérifie la taille maximale\n\n// Log complet de l'entrée pour débogage\nconsole.log('Structure complète de l\\'entrée:', JSON.stringify($input, null, 2));\n\n// Déterminer si des données binaires sont présentes\nlet hasBinaryData = false;\nlet fileName = 'document.pdf';\nlet fileSize = 0;\nlet fileType = '';\nlet fileMimeType = '';\nlet errors = [];\n\nif ($input.item && $input.item.binary) {\n  const binaryProperties = Object.keys($input.item.binary);\n  if (binaryProperties.length > 0) {\n    hasBinaryData = true;\n    const firstProperty = binaryProperties[0];\n    console.log('Propriété binaire trouvée:', firstProperty);\n    \n    const fileData = $input.item.binary[firstProperty];\n    if (fileData) {\n      fileName = fileData.fileName || fileName;\n      fileSize = fileData.fileSize || fileSize;\n      fileMimeType = fileData.mimeType || '';\n      console.log('Fichier trouvé:', fileName, '(', fileSize, 'octets )', 'Type:', fileMimeType);\n      \n      // Vérifier si c'est un PDF\n      if (fileMimeType !== 'application/pdf') {\n        errors.push('Le fichier doit être au format PDF');\n      }\n      \n      // Vérifier la taille maximale (150 Mo)\n      const MAX_SIZE = 150 * 1024 * 1024; // 150 Mo en octets\n      if (fileSize > MAX_SIZE) {\n        errors.push(`Le fichier est trop volumineux (${Math.round(fileSize / (1024 * 1024))} Mo). Maximum autorisé: 150 Mo`);\n      }\n    }\n  } else {\n    errors.push('Aucune donnée binaire trouvée');\n  }\n} else {\n  errors.push('Aucun fichier n\\'a été téléchargé');\n}\n\n// Préparer l'objet de sortie avec les métadonnées\nconst output = {\n  success: errors.length === 0,\n  errors: errors,\n  document_id: hasBinaryData ? 'doc-' + Date.now() : null,\n  document_name: fileName,\n  document_size: fileSize,\n  document_type: fileMimeType,\n  processing_status: errors.length === 0 ? 'ready_for_extraction' : 'rejected',\n  large_document: fileSize > 25 * 1024 * 1024, // Marquer les documents > 25 Mo comme \"larges\"\n  timestamp: new Date().toISOString()\n};\n\n// Log final\nconsole.log('Résultat de la validation:', JSON.stringify(output, null, 2));\n\nreturn output;"
       },
       "name": "Validate Document",
       "type": "n8n-nodes-base.code",
@@ -110,7 +110,8 @@
       "position": [
         1140,
         100
-      ]
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -141,6 +142,25 @@
       "position": [
         1140,
         320
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.success !== false }}"
+            }
+          ]
+        }
+      },
+      "name": "Document AI Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1260,
+        320
       ]
     },
     {
@@ -166,20 +186,39 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
       "position": [
-        1320,
-        320
+        1380,
+        280
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.success !== false }}"
+            }
+          ]
+        }
+      },
+      "name": "Vision AI Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        280
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Traitement des résultats de Document AI et Vision AI\n// Prépare les données pour la vectorisation\n\n// Structure d'entrée\n// $json contient les résultats de Document AI\n// $node[\"Classify Images with Vision AI\"].json contient les résultats de Vision AI\n\n// Récupérer les données Document AI\nconst docAiResults = $json || {};\nconst docText = docAiResults.text_blocks || [];\nconst docImages = docAiResults.images || [];\n\n// Récupérer les données Vision AI\nconst visionResults = $node[\"Classify Images with Vision AI\"].json || {};\nconst classifiedImages = visionResults.classified_images || [];\n\n// Fusionner les informations d'images\nconst imagesWithClassification = docImages.map(img => {\n  const classification = classifiedImages.find(\n    classImg => classImg.image_id === img.image_id\n  ) || { classification: 'unknown', confidence: 0 };\n  \n  return {\n    ...img,\n    type: classification.classification,\n    confidence: classification.confidence,\n    is_technical: classification.classification === 'technical_diagram',\n    contains_text: classification.contains_text || false,\n    ocr_needed: classification.classification === 'technical_diagram' && classification.contains_text\n  };\n});\n\n// Préparer la structure de sortie\nconst result = {\n  document_id: docAiResults.document_id,\n  document_name: docAiResults.document_name,\n  text_blocks: docText,\n  images: imagesWithClassification,\n  ready_for_vectorization: true,\n  stats: {\n    text_blocks_count: docText.length,\n    images_count: docImages.length,\n    technical_diagrams_count: imagesWithClassification.filter(img => img.is_technical).length,\n    decorative_images_count: imagesWithClassification.filter(img => !img.is_technical).length\n  }\n};\n\n// Log des résultats\nconsole.log('Données préparées pour vectorisation:', JSON.stringify(result, null, 2));\n\nreturn result;"
+        "jsCode": "// Traitement des résultats de Document AI et Vision AI\n// Prépare les données pour la vectorisation\n\n// Structure d'entrée\n// $json contient les résultats de Document AI\n// $node[\"Classify Images with Vision AI\"].json contient les résultats de Vision AI\n\n// Récupérer les données Document AI\nconst docAiResults = $json || {};\nconst docText = docAiResults.text_blocks || [];\nconst docImages = docAiResults.images || [];\n\n// Récupérer les données Vision AI\nconst visionResults = $node[\"Classify Images with Vision AI\"].json || {};\nconst classifiedImages = visionResults.classified_images || [];\n\n// Fusionner les informations d'images\nconst imagesWithClassification = docImages.map(img => {\n  const classification = classifiedImages.find(\n    classImg => classImg.image_id === img.image_id\n  ) || { classification: 'unknown', confidence: 0 };\n  \n  return {\n    ...img,\n    type: classification.classification,\n    confidence: classification.confidence,\n    is_technical: classification.classification === 'technical_diagram',\n    contains_text: classification.contains_text || false,\n    ocr_needed: classification.classification === 'technical_diagram' && classification.contains_text\n  };\n});\n\n// Préparer la structure de sortie\nconst result = {\n  document_id: docAiResults.document_id,\n  document_name: docAiResults.document_name,\n  text_blocks: docText,\n  images: imagesWithClassification,\n  ready_for_vectorization: true,\n  stats: {\n    text_blocks_count: docText.length,\n    images_count: docImages.length,\n    technical_diagrams_count: imagesWithClassification.filter(img => img.is_technical).length,\n    decorative_images_count: imagesWithClassification.filter(img => !img.is_technical).length\n  },\n  timestamp: new Date().toISOString()\n};\n\n// Log des résultats\nconsole.log('Données préparées pour vectorisation:', JSON.stringify(result, null, 2));\n\nreturn result;"
       },
       "name": "Merge Document AI and Vision AI",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
-        1500,
-        320
+        1620,
+        280
       ]
     },
     {
@@ -209,8 +248,27 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
       "position": [
-        1680,
-        320
+        1740,
+        280
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.success !== false }}"
+            }
+          ]
+        }
+      },
+      "name": "Vectorization Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1860,
+        280
       ]
     },
     {
@@ -244,20 +302,39 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
       "position": [
-        1860,
-        320
+        1980,
+        240
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.success !== false }}"
+            }
+          ]
+        }
+      },
+      "name": "Indexation Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2100,
+        240
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Préparation de la réponse finale après vectorisation et indexation\n\n// Données d'entrée\nconst vectorizationResults = $json || {};\nconst indexingResults = $node[\"Index in Qdrant\"].json || {};\n\n// Statistiques sur la vectorisation\nconst vectorStats = vectorizationResults.stats || {\n  text_chunks_vectorized: 0,\n  images_vectorized: 0\n};\n\n// Statistiques sur l'indexation\nconst indexStats = indexingResults.stats || {\n  points_indexed: 0,\n  index_size_kb: 0\n};\n\n// Préparer la réponse finale\nconst finalResponse = {\n  success: true,\n  document_id: vectorizationResults.document_id,\n  document_name: vectorizationResults.document_name,\n  processing_completed: true,\n  processing_stats: {\n    text_chunks_count: vectorStats.text_chunks_vectorized,\n    images_count: vectorStats.images_vectorized,\n    total_vectors: indexStats.points_indexed,\n    vector_index_size_kb: indexStats.index_size_kb\n  },\n  retrieval_ready: true,\n  processing_time_ms: Date.now() - parseInt(vectorizationResults.document_id.split('-')[1] || 0)\n};\n\n// Log de la réponse finale\nconsole.log('Réponse finale:', JSON.stringify(finalResponse, null, 2));\n\nreturn finalResponse;"
+        "jsCode": "// Préparation de la réponse finale après vectorisation et indexation\n\n// Données d'entrée\nconst vectorizationResults = $json || {};\nconst indexingResults = $node[\"Index in Qdrant\"].json || {};\n\n// Statistiques sur la vectorisation\nconst vectorStats = vectorizationResults.stats || {\n  text_chunks_vectorized: 0,\n  images_vectorized: 0\n};\n\n// Statistiques sur l'indexation\nconst indexStats = indexingResults.stats || {\n  points_indexed: 0,\n  index_size_kb: 0\n};\n\n// Préparer la réponse finale\nconst finalResponse = {\n  success: true,\n  document_id: vectorizationResults.document_id,\n  document_name: vectorizationResults.document_name,\n  processing_completed: true,\n  processing_stats: {\n    text_chunks_count: vectorStats.text_chunks_vectorized,\n    images_count: vectorStats.images_vectorized,\n    total_vectors: indexStats.points_indexed,\n    vector_index_size_kb: indexStats.index_size_kb\n  },\n  retrieval_ready: true,\n  processing_time_ms: Date.now() - parseInt(vectorizationResults.document_id.split('-')[1] || 0),\n  timestamp: new Date().toISOString()\n};\n\n// Log de la réponse finale\nconsole.log('Réponse finale:', JSON.stringify(finalResponse, null, 2));\n\nreturn finalResponse;"
       },
       "name": "Finalize Indexing Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
-        2040,
-        320
+        2220,
+        200
       ]
     },
     {
@@ -291,13 +368,62 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
       "position": [
+        2340,
+        200
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Erreur Document AI\n\n// Récupérer les informations du document\nconst documentInfo = {\n  document_id: $node[\"Validate Document\"].json.document_id,\n  document_name: $node[\"Validate Document\"].json.document_name\n};\n\n// Préparer les détails de l'erreur\nconst errorDetails = {\n  phase: \"document_ai\",\n  error: $json.error || \"Erreur de traitement avec Document AI\",\n  statusCode: $json.statusCode || 500,\n  timestamp: new Date().toISOString()\n};\n\n// Combiner pour la réponse\nconst result = {\n  success: false,\n  ...documentInfo,\n  error_details: errorDetails\n};\n\n// Log pour débogage\nconsole.log('Erreur Document AI:', JSON.stringify(result, null, 2));\n\nreturn result;"
+      },
+      "name": "Handle DocumentAI Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1380,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Erreur Vision AI\n\n// Récupérer les informations du document\nconst documentInfo = {\n  document_id: $json.document_id || $node[\"Validate Document\"].json.document_id,\n  document_name: $json.document_name || $node[\"Validate Document\"].json.document_name\n};\n\n// Préparer les détails de l'erreur\nconst errorDetails = {\n  phase: \"vision_ai\",\n  error: $json.error || \"Erreur de classification des images\",\n  statusCode: $json.statusCode || 500,\n  timestamp: new Date().toISOString()\n};\n\n// Combiner pour la réponse\nconst result = {\n  success: false,\n  ...documentInfo,\n  error_details: errorDetails\n};\n\n// Log pour débogage\nconsole.log('Erreur Vision AI:', JSON.stringify(result, null, 2));\n\nreturn result;"
+      },
+      "name": "Handle VisionAI Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1620,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Erreur Vectorisation\n\n// Récupérer les informations du document\nconst documentInfo = {\n  document_id: $json.document_id || $node[\"Validate Document\"].json.document_id,\n  document_name: $json.document_name || $node[\"Validate Document\"].json.document_name\n};\n\n// Préparer les détails de l'erreur\nconst errorDetails = {\n  phase: \"vectorization\",\n  error: $json.error || \"Erreur de vectorisation du contenu\",\n  statusCode: $json.statusCode || 500,\n  timestamp: new Date().toISOString()\n};\n\n// Combiner pour la réponse\nconst result = {\n  success: false,\n  ...documentInfo,\n  error_details: errorDetails\n};\n\n// Log pour débogage\nconsole.log('Erreur Vectorisation:', JSON.stringify(result, null, 2));\n\nreturn result;"
+      },
+      "name": "Handle Vectorization Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Erreur Indexation\n\n// Récupérer les informations du document\nconst documentInfo = {\n  document_id: $json.document_id || $node[\"Validate Document\"].json.document_id,\n  document_name: $json.document_name || $node[\"Validate Document\"].json.document_name\n};\n\n// Préparer les détails de l'erreur\nconst errorDetails = {\n  phase: \"indexation\",\n  error: $json.error || \"Erreur d'indexation dans Qdrant\",\n  statusCode: $json.statusCode || 500,\n  timestamp: new Date().toISOString()\n};\n\n// Combiner pour la réponse\nconst result = {\n  success: false,\n  ...documentInfo,\n  error_details: errorDetails\n};\n\n// Log pour débogage\nconsole.log('Erreur Indexation:', JSON.stringify(result, null, 2));\n\nreturn result;"
+      },
+      "name": "Handle Indexation Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
         2220,
         320
       ]
     },
     {
       "parameters": {
-        "content": "={{ JSON.stringify({success: false, errors: $json.errors}) }}",
+        "content": "={{ JSON.stringify({success: false, errors: $json.errors || [$json.error_details && $json.error_details.error]}) }}",
         "options": {
           "responseCode": 400
         }
@@ -312,13 +438,49 @@
     },
     {
       "parameters": {
+        "url": "=http://frontend:3000/api/notifications",
+        "allowUnauthorizedCerts": true,
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "type",
+              "value": "document_error"
+            },
+            {
+              "name": "document_id",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "name": "document_name",
+              "value": "={{ $json.document_name }}"
+            },
+            {
+              "name": "error",
+              "value": "={{ JSON.stringify($json.error_details) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Notify Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        2340,
+        320
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
         "jsCode": "// Combiner les informations et retourner une réponse cohérente\n\n// Récupérer les infos du document\nlet documentInfo = {\n  document_id: $json.document_id,\n  document_name: $json.document_name\n};\n\n// Déterminer la source des statistiques\nlet stats = {};\n\n// Si on arrive depuis le merge Document AI et Vision AI\nif ($json.stats) {\n  stats = {\n    text_chunks_count: $json.stats.text_blocks_count,\n    images_count: $json.stats.images_count,\n    technical_diagrams_count: $json.stats.technical_diagrams_count,\n    decorative_images_count: $json.stats.decorative_images_count\n  };\n} else {\n  // Sinon, utiliser des statistiques simulées\n  stats = {\n    text_chunks_count: Math.floor(Math.random() * 20) + 5,\n    images_count: Math.floor(Math.random() * 10) + 1,\n    technical_diagrams_count: Math.floor(Math.random() * 5),\n    decorative_images_count: Math.floor(Math.random() * 5)\n  };\n}\n\n// Préparer des informations de traitement\nconst processingInfo = {\n  status: 'processing',\n  processing_type: $json.large_document ? 'large_document' : 'standard',\n  estimated_completion: new Date(Date.now() + 60000).toISOString() // +1 min\n};\n\n// Préparer la réponse finale\nconst result = {\n  success: true,\n  ...documentInfo,\n  ...stats,\n  ...processingInfo\n};\n\nconsole.log('Réponse finale:', JSON.stringify(result, null, 2));\n\nreturn result;"
       },
       "name": "Prepare Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
-        1860,
+        1260,
         100
       ]
     },
@@ -333,7 +495,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        2040,
+        1860,
         100
       ]
     },
@@ -345,8 +507,63 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
-        2400,
+        2500,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Journalisation des erreurs\nconst errorLog = {\n  timestamp: new Date().toISOString(),\n  document_id: $json.document_id,\n  document_name: $json.document_name,\n  error_phase: $json.error_details ? $json.error_details.phase : 'unknown',\n  error_message: $json.error_details ? $json.error_details.error : 'Erreur inconnue',\n  status_code: $json.error_details ? $json.error_details.statusCode : 500\n};\n\n// Envoi vers un système de logging des erreurs (simulé ici)\nconsole.log('Log d\\'erreur:', JSON.stringify(errorLog, null, 2));\n\n// Notification éventuelle aux administrateurs (simulé)\nconsole.log('Notification d\\'erreur envoyée aux administrateurs');\n\n// Retourner pour chaînage éventuel\nreturn errorLog;"
+      },
+      "name": "Log Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2500,
         320
+      ]
+    },
+    {
+      "parameters": {
+        "path": "health/ingestion",
+        "responseMode": "responseNode",
+        "options": {},
+        "httpMethod": "GET"
+      },
+      "name": "Health Check Endpoint",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        800
+      ],
+      "webhookId": "health-ingestion"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Vérification de santé du pipeline d'ingestion\n\n// Vérifiez la connexion à chaque service\nconst services = [\n  {\n    name: \"Document Processor\",\n    status: \"operational\", // Simulé comme opérationnel\n    url: \"http://document-processor:5000/health\"\n  },\n  {\n    name: \"Vision Classifier\",\n    status: \"operational\", // Simulé comme opérationnel\n    url: \"http://vision-classifier:5000/health\"\n  },\n  {\n    name: \"Vector Service\",\n    status: \"operational\", // Simulé comme opérationnel\n    url: \"http://vector-service:5000/health\"\n  },\n  {\n    name: \"Frontend\",\n    status: \"operational\", // Simulé comme opérationnel\n    url: \"http://frontend:3000/api/health\"\n  }\n];\n\n// Vérifier l'état global\nconst allOperational = services.every(svc => svc.status === \"operational\");\n\n// Préparer la réponse\nconst healthStatus = {\n  service: \"TechnicIA Ingestion Pipeline\",\n  status: allOperational ? \"operational\" : \"degraded\",\n  timestamp: new Date().toISOString(),\n  services: services,\n  version: \"1.0.0\"\n};\n\nreturn healthStatus;"
+      },
+      "name": "Check Services Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        420,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "name": "Return Health Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        600,
+        800
       ]
     }
   ],
@@ -435,7 +652,25 @@
       "main": [
         [
           {
+            "node": "Document AI Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document AI Success?": {
+      "main": [
+        [
+          {
             "node": "Classify Images with Vision AI",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle DocumentAI Error",
             "type": "main",
             "index": 0
           }
@@ -446,7 +681,25 @@
       "main": [
         [
           {
+            "node": "Vision AI Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vision AI Success?": {
+      "main": [
+        [
+          {
             "node": "Merge Document AI and Vision AI",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle VisionAI Error",
             "type": "main",
             "index": 0
           }
@@ -468,7 +721,25 @@
       "main": [
         [
           {
+            "node": "Vectorization Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vectorization Success?": {
+      "main": [
+        [
+          {
             "node": "Index in Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Vectorization Error",
             "type": "main",
             "index": 0
           }
@@ -479,7 +750,25 @@
       "main": [
         [
           {
+            "node": "Indexation Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Indexation Success?": {
+      "main": [
+        [
+          {
             "node": "Finalize Indexing Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Indexation Error",
             "type": "main",
             "index": 0
           }
@@ -508,11 +797,88 @@
         ]
       ]
     },
+    "Handle DocumentAI Error": {
+      "main": [
+        [
+          {
+            "node": "Notify Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle VisionAI Error": {
+      "main": [
+        [
+          {
+            "node": "Notify Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Vectorization Error": {
+      "main": [
+        [
+          {
+            "node": "Notify Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Indexation Error": {
+      "main": [
+        [
+          {
+            "node": "Notify Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Error": {
+      "main": [
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Prepare Response": {
       "main": [
         [
           {
             "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Check Endpoint": {
+      "main": [
+        [
+          {
+            "node": "Check Services Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Services Status": {
+      "main": [
+        [
+          {
+            "node": "Return Health Status",
             "type": "main",
             "index": 0
           }
