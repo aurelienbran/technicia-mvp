@@ -409,7 +409,9 @@
     "Store Document": {
       "main": [
         [
-          {"node": "Document Size Router", "type": "main", "index": 0},
+          {"node": "Document Size Router", "type": "main", "index": 0}
+        ],
+        [
           {"node": "Return Initial Success", "type": "main", "index": 0}
         ]
       ]
