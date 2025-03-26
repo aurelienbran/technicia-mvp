@@ -54,7 +54,7 @@
     },
     {
       "parameters": {
-        "url": "=http://technicia-document-processor:8000/process-large-file",
+        "url": "http://technicia-document-processor:8000/process-large-file",
         "method": "POST",
         "sendBinaryData": true,
         "binaryPropertyName": "={{ $json.binaryPropertyName }}",
@@ -73,35 +73,15 @@
     },
     {
       "parameters": {
-        "url": "=http://technicia-document-processor:8000/process",
+        "url": "http://technicia-document-processor:8000/process",
         "method": "POST",
         "authentication": "none",
-        "sendBody": true,
-        "contentType": "multipart-form-data",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "file",
-              "value": "={{ $binary[$json.binaryPropertyName].data }}",
-              "parameterType": "formBinaryData"
-            }
-          ]
-        },
+        "sendBinaryData": true,
+        "binaryPropertyName": "={{ $json.binaryPropertyName }}",
         "options": {
           "allowUnauthorizedCerts": true,
           "timeout": 60000,
-          "responseFormat": "json",
-          "redirect": {
-            "redirect": {
-              "followRedirects": true,
-              "maxRedirects": 21
-            }
-          },
-          "proxy": {
-            "proxy": {
-              "enabled": false
-            }
-          }
+          "responseFormat": "json"
         }
       },
       "name": "Process Standard File",
@@ -128,7 +108,7 @@
     },
     {
       "parameters": {
-        "url": "=http://technicia-document-processor:8000/task/{{ $json.task_id }}",
+        "url": "http://technicia-document-processor:8000/task/{{ $json.task_id }}",
         "options": {
           "allowUnauthorizedCerts": true,
           "timeout": 30000
@@ -203,7 +183,7 @@
     },
     {
       "parameters": {
-        "url": "=http://technicia-vision-classifier:8000/classify",
+        "url": "http://technicia-vision-classifier:8000/classify",
         "method": "POST",
         "sendBinaryData": false,
         "options": {
@@ -271,7 +251,7 @@
     },
     {
       "parameters": {
-        "url": "=http://technicia-vector-store:8000/embed-text",
+        "url": "http://technicia-vector-store:8000/embed-text",
         "method": "POST",
         "options": {
           "allowUnauthorizedCerts": true,
@@ -290,7 +270,7 @@
     },
     {
       "parameters": {
-        "url": "=http://technicia-vector-store:8000/embed-image",
+        "url": "http://technicia-vector-store:8000/embed-image",
         "method": "POST",
         "options": {
           "allowUnauthorizedCerts": true,
