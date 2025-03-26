@@ -44,13 +44,6 @@
       "position": [600, 300]
     },
     {
-      "parameters": {},
-      "name": "No Operation",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [780, 200]
-    },
-    {
       "parameters": {
         "functionName": "writeBinaryFile",
         "fileName": "={{ $json.document_id + '/' + $json.document_name }}",
@@ -59,16 +52,16 @@
       "name": "Store Document",
       "type": "n8n-nodes-base.executeFunction",
       "typeVersion": 1,
-      "position": [960, 100]
+      "position": [780, 200]
     },
     {
       "parameters": {
-        "jsCode": "// Copie des données du document pour la réponse et le routage\nreturn $json;"
+        "jsCode": "// Copie des données pour garder l'information de document_id et document_name\n// Nécessaire pour la réponse utilisateur\n\nreturn {\n  document_id: $json.document_id,\n  document_name: $json.document_name,\n  large_document: $json.large_document,\n  document_size: $json.document_size,\n  timestamp: $json.timestamp\n};"
       },
-      "name": "Prepare Response Data",
+      "name": "Duplicate Document Info",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [960, 300]
+      "position": [780, 300]
     },
     {
       "parameters": {
@@ -84,7 +77,7 @@
       "name": "Document Size Router",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [1140, 100]
+      "position": [960, 200]
     },
     {
       "parameters": {
@@ -112,7 +105,7 @@
       "name": "Send to Large Document Processing",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1320, 40],
+      "position": [1140, 120],
       "continueOnFail": true
     },
     {
@@ -141,8 +134,29 @@
       "name": "Send to Standard Processing",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1320, 160],
+      "position": [1140, 280],
       "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prépare la réponse à l'utilisateur\nreturn {\n  success: true,\n  document_id: $json.document_id,\n  document_name: $json.document_name,\n  status: 'processing',\n  message: 'Document accepté et en cours de traitement',\n  large_document: $json.large_document\n};"
+      },
+      "name": "Prepare Response Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "name": "Return Initial Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1140, 380]
     },
     {
       "parameters": {
@@ -155,18 +169,6 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [780, 420]
-    },
-    {
-      "parameters": {
-        "content": "={{ JSON.stringify({success: true, document_id: $json.document_id, status: 'processing', message: 'Document accepté et en cours de traitement', large_document: $json.large_document}) }}",
-        "options": {
-          "responseCode": 200
-        }
-      },
-      "name": "Return Initial Success",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [1200, 300]
     },
     {
       "parameters": {
@@ -221,18 +223,11 @@
     "Document Valid?": {
       "main": [
         [
-          {"node": "No Operation", "type": "main", "index": 0}
+          {"node": "Store Document", "type": "main", "index": 0},
+          {"node": "Duplicate Document Info", "type": "main", "index": 0}
         ],
         [
           {"node": "Return Validation Error", "type": "main", "index": 0}
-        ]
-      ]
-    },
-    "No Operation": {
-      "main": [
-        [
-          {"node": "Store Document", "type": "main", "index": 0},
-          {"node": "Prepare Response Data", "type": "main", "index": 0}
         ]
       ]
     },
@@ -243,10 +238,10 @@
         ]
       ]
     },
-    "Prepare Response Data": {
+    "Duplicate Document Info": {
       "main": [
         [
-          {"node": "Return Initial Success", "type": "main", "index": 0}
+          {"node": "Prepare Response Data", "type": "main", "index": 0}
         ]
       ]
     },
@@ -257,6 +252,13 @@
         ],
         [
           {"node": "Send to Standard Processing", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Prepare Response Data": {
+      "main": [
+        [
+          {"node": "Return Initial Success", "type": "main", "index": 0}
         ]
       ]
     },
