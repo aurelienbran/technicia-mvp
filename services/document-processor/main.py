@@ -61,6 +61,121 @@ async def health_check():
             content={"status": "error", "message": str(e)}
         )
 
+@app.post("/process")
+async def process_document(file: UploadFile = File(...)):
+    """
+    Traite un document PDF de manière synchrone.
+    
+    Args:
+        file: Le fichier PDF à traiter
+        
+    Returns:
+        Les données extraites du document
+    """
+    try:
+        # Validation du type de fichier
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(
+                status_code=400,
+                detail="Type de fichier non supporté. Seuls les fichiers PDF sont acceptés."
+            )
+        
+        # Générer un ID unique
+        document_id = str(uuid.uuid4())
+        
+        # Sauvegarder le fichier temporairement
+        temp_file_path = TEMP_DIR / f"{document_id}_{file.filename}"
+        
+        with open(temp_file_path, "wb") as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+        
+        # Initialiser le client Document AI
+        client = documentai.DocumentProcessorServiceClient()
+        name = f"projects/{DOCUMENT_AI_PROJECT}/locations/{DOCUMENT_AI_LOCATION}/processors/{DOCUMENT_AI_PROCESSOR_ID}"
+        
+        # Lire le fichier PDF
+        with open(temp_file_path, "rb") as f:
+            content = f.read()
+        
+        # Préparer et envoyer la requête à Document AI
+        document = documentai.RawDocument(content=content, mime_type="application/pdf")
+        request = documentai.ProcessRequest(name=name, raw_document=document)
+        
+        # Traiter le document
+        result = client.process_document(request=request)
+        document = result.document
+        
+        # Extraire et structurer le texte
+        text = document.text
+        
+        # Extraire les pages et paragraphes
+        pages = []
+        for page in document.pages:
+            paragraphs = []
+            for paragraph in page.paragraphs:
+                para_text = get_text_from_layout(paragraph.layout, text)
+                paragraphs.append({
+                    "text": para_text,
+                    "confidence": paragraph.layout.confidence
+                })
+            
+            # Extraire les images de la page (simulation)
+            images = []
+            for image in page.image_detection_params:
+                image_path = f"{TEMP_DIR}/{document_id}_page{page.page_number}_image{len(images)}.png"
+                images.append({
+                    "id": f"img-{uuid.uuid4()}",
+                    "path": image_path,
+                    "page_number": page.page_number
+                })
+            
+            pages.append({
+                "page_number": page.page_number,
+                "paragraphs": paragraphs,
+                "width": page.dimension.width,
+                "height": page.dimension.height,
+                "images": images
+            })
+        
+        # Extraire les entités
+        entities = []
+        for entity in document.entities:
+            entities.append({
+                "type": entity.type,
+                "mention_text": entity.mention_text,
+                "confidence": entity.confidence
+            })
+        
+        # Structurer le résultat
+        structured_result = {
+            "document_id": document_id,
+            "document_text": text,
+            "pages": pages,
+            "entities": entities,
+            "mime_type": document.mime_type,
+            "page_count": len(document.pages),
+            "images": [], # À remplacer par des images réelles extraites du document
+            "filename": file.filename
+        }
+        
+        # Nettoyer le fichier temporaire
+        try:
+            os.unlink(temp_file_path)
+        except Exception as e:
+            logger.warning(f"Erreur lors du nettoyage du fichier {temp_file_path}: {str(e)}")
+        
+        return structured_result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur lors du traitement du document: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors du traitement du document: {str(e)}"
+        )
+
 @app.post("/process-large-file")
 async def process_large_file(
     file: UploadFile = File(...),
@@ -231,11 +346,22 @@ async def process_with_document_ai(task_id: str, file_path: str):
                     "confidence": paragraph.layout.confidence
                 })
             
+            # Extraire les images de la page (simulation)
+            images = []
+            for i in range(2):  # Simulation de 2 images par page
+                image_path = f"{TEMP_DIR}/{task_id}_page{page.page_number}_image{i}.png"
+                images.append({
+                    "id": f"img-{uuid.uuid4()}",
+                    "path": image_path,
+                    "page_number": page.page_number
+                })
+            
             pages.append({
                 "page_number": page.page_number,
                 "paragraphs": paragraphs,
                 "width": page.dimension.width,
-                "height": page.dimension.height
+                "height": page.dimension.height,
+                "images": images
             })
         
         # Extraire les entités
@@ -253,7 +379,9 @@ async def process_with_document_ai(task_id: str, file_path: str):
             "pages": pages,
             "entities": entities,
             "mime_type": document.mime_type,
-            "page_count": len(document.pages)
+            "page_count": len(document.pages),
+            "images": [], # À remplacer par les images réelles extraites du document
+            "processing_time": time.time() - processing_tasks[task_id]["start_time"]
         }
         
         # Mettre à jour l'état avec le résultat
