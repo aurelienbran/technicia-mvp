@@ -53,7 +53,7 @@
     },
     {
       "parameters": {
-        "fileName": "={{ $node[\"Config Parameters\"].json.storageFolder + $json.documentId + '/' + $json.fileName }}",
+        "fileName": "={{ $json.storageFolder + $json.documentId + '/' + $json.fileName }}",
         "binaryPropertyName": "={{ $json.binaryDataKey }}",
         "options": {
           "createParentPath": true
@@ -62,16 +62,16 @@
       "name": "Write Binary File",
       "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
-      "position": [760, 200]
+      "position": [920, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Préparer les données pour le traitement du document\n\n// Récupérer les données de configuration\nconst config = $node[\"Config Parameters\"].json;\n\n// Récupérer les données du document\nconst documentInfo = $node[\"Validate Document\"].json;\n\n// Récupérer les informations du fichier stocké\nconst storedFile = $input.item.json;\n\nreturn {\n  json: {\n    // Informations du document\n    documentId: documentInfo.documentId,\n    fileName: documentInfo.fileName,\n    filePath: storedFile.path || storedFile.fileName,\n    mimeType: documentInfo.mimeType,\n    fileSize: documentInfo.fileSize,\n    \n    // Données binaires pour le transfert (si besoin)\n    binaryDataKey: documentInfo.binaryDataKey,\n    \n    // Chemins complets\n    fullPath: config.storageFolder + documentInfo.documentId + '/' + documentInfo.fileName,\n    basePath: config.storageFolder + documentInfo.documentId + '/',\n    \n    // URLs des microservices\n    documentProcessorUrl: config.documentProcessorUrl,\n    schemaAnalyzerUrl: config.schemaAnalyzerUrl,\n    vectorEngineUrl: config.vectorEngineUrl,\n    \n    // Timestamp pour le suivi\n    timestamp: new Date().toISOString(),\n    \n    // Type de requête\n    requestType: 'document_ingestion'\n  }\n};"
+        "jsCode": "// Préparer les données pour le traitement du document\n\n// Récupérer les informations du fichier stocké\nconst storedFile = $input.item.json;\n\nreturn {\n  json: {\n    // Informations du document\n    documentId: storedFile.documentId,\n    fileName: storedFile.fileName,\n    filePath: storedFile.path || storedFile.fileName,\n    mimeType: storedFile.mimeType,\n    fileSize: storedFile.fileSize,\n    \n    // Données binaires pour le transfert (si besoin)\n    binaryDataKey: storedFile.binaryDataKey,\n    \n    // Chemins complets\n    fullPath: storedFile.storageFolder + storedFile.documentId + '/' + storedFile.fileName,\n    basePath: storedFile.storageFolder + storedFile.documentId + '/',\n    \n    // URLs des microservices\n    documentProcessorUrl: storedFile.documentProcessorUrl,\n    schemaAnalyzerUrl: storedFile.schemaAnalyzerUrl,\n    vectorEngineUrl: storedFile.vectorEngineUrl,\n    \n    // Timestamp pour le suivi\n    timestamp: new Date().toISOString(),\n    \n    // Type de requête\n    requestType: 'document_ingestion'\n  }\n};"
       },
       "name": "Prepare Document Processing",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [940, 300]
+      "position": [1080, 300]
     },
     {
       "parameters": {
@@ -122,7 +122,7 @@
       "name": "Document Processor Service",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 2,
-      "position": [1120, 300]
+      "position": [1240, 300]
     },
     {
       "parameters": {
@@ -131,7 +131,7 @@
       "name": "Process Document Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1300, 300]
+      "position": [1400, 300]
     },
     {
       "parameters": {
@@ -154,7 +154,7 @@
       "name": "Schema Analyzer Service",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 2,
-      "position": [1480, 300]
+      "position": [1560, 300]
     },
     {
       "parameters": {
@@ -163,7 +163,7 @@
       "name": "Process Schema Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1660, 300]
+      "position": [1720, 300]
     },
     {
       "parameters": {
@@ -186,7 +186,7 @@
       "name": "Vector Engine Service",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 2,
-      "position": [1840, 300]
+      "position": [1880, 300]
     },
     {
       "parameters": {
@@ -195,7 +195,7 @@
       "name": "Prepare Final Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [2020, 300]
+      "position": [2040, 300]
     },
     {
       "parameters": {
@@ -250,7 +250,7 @@
       "name": "Send Response Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [940, 100]
+      "position": [1080, 160]
     },
     {
       "parameters": {
@@ -384,11 +384,6 @@
       "main": [
         [
           {
-            "node": "Write Binary File",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Config Parameters",
             "type": "main",
             "index": 0
@@ -412,7 +407,7 @@
       "main": [
         [
           {
-            "node": "Prepare Document Processing",
+            "node": "Write Binary File",
             "type": "main",
             "index": 0
           }
