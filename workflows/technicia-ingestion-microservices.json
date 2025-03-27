@@ -1,0 +1,752 @@
+{
+  "name": "TechnicIA - Workflow d'Ingestion avec Microservices",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "upload",
+        "responseMode": "lastNode",
+        "options": {
+          "binaryData": true,
+          "bodyContentType": "multipart/form-data"
+        },
+        "httpMethod": "POST"
+      },
+      "name": "Document Upload Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "upload"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Validation du document\nlet errors = [];\nlet documentId = 'doc-' + Date.now(); // ID unique pour ce document\nlet documentData = {};\n\n// Vérifier si nous avons reçu un fichier PDF\nif ($input.item && $input.item.binary) {\n  const keys = Object.keys($input.item.binary);\n  if (keys.length > 0) {\n    const fileData = $input.item.binary[keys[0]];\n    if (fileData) {\n      documentData = {\n        fileName: fileData.fileName || 'document.pdf',\n        mimeType: fileData.mimeType || '',\n        fileSize: fileData.fileSize || 0,\n        data: keys[0] // Clé d'accès à la donnée binaire\n      };\n      \n      // Vérification du type de fichier (doit être PDF)\n      if (documentData.mimeType !== 'application/pdf') {\n        errors.push('Le fichier doit être au format PDF');\n      }\n      \n      // Vérification de la taille maximale (200 Mo)\n      const MAX_SIZE = 200 * 1024 * 1024;\n      if (documentData.fileSize > MAX_SIZE) {\n        errors.push(`Le fichier est trop volumineux (${Math.round(documentData.fileSize / (1024 * 1024))} Mo). Maximum autorisé: 200 Mo`);\n      }\n    } else {\n      errors.push('Données de fichier invalides');\n    }\n  } else {\n    errors.push('Aucune donnée binaire trouvée');\n  }\n} else {\n  errors.push('Aucun fichier n\\'a été téléchargé');\n}\n\n// Résultat de la validation\nreturn {\n  json: {\n    documentId: documentId,\n    fileName: documentData.fileName,\n    fileSize: documentData.fileSize,\n    mimeType: documentData.mimeType,\n    errors: errors,\n    isValid: errors.length === 0,\n    timestamp: new Date().toISOString(),\n    binaryDataKey: documentData.data || null\n  }\n};"
+      },
+      "name": "Validate Document",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isValid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Document Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuration - serait normalement dans un fichier .env ou des credentials\nreturn {\n  json: {\n    googleProjectId: 'technicia-docs',\n    googleRegion: 'us',\n    processorId: 'abc123456789',\n    storageFolder: '/tmp/technicia-docs/',\n    // URLs des microservices\n    documentProcessorUrl: 'http://document-processor:8001/api/process',\n    schemaAnalyzerUrl: 'http://schema-analyzer:8002/api/analyze',\n    vectorEngineUrl: 'http://vector-engine:8003/api/vectorize',\n    diagnosisEngineUrl: 'http://diagnosis-engine:8004/api/diagnose',\n    // Seuils pour utilisation des microservices\n    largeFileSizeThreshold: 25 * 1024 * 1024, // 25 Mo\n    ...$input.item.json\n  }\n};"
+      },
+      "name": "Config Parameters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [760, 300]
+    },
+    {
+      "parameters": {
+        "fileName": "={{ $node[\"Config Parameters\"].json.storageFolder + $json.documentId + '/' + $json.fileName }}",
+        "binaryPropertyName": "={{ $json.binaryDataKey }}",
+        "options": {
+          "createParentPath": true
+        }
+      },
+      "name": "Write Binary File",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [760, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Préparer les données pour le traitement du document\n// Combine les résultats du fichier stocké et des paramètres de configuration\n\n// Récupérer les données de configuration\nconst config = $node[\"Config Parameters\"].json;\n\n// Récupérer les données du document\nconst documentInfo = $node[\"Validate Document\"].json;\n\n// Récupérer les informations du fichier stocké\nconst storedFile = $input.item.json;\n\n// Déterminer si on doit utiliser le microservice DocumentProcessor\n// basé sur la taille du fichier\nconst useMicroservice = documentInfo.fileSize > config.largeFileSizeThreshold;\n\nreturn {\n  json: {\n    // Paramètres de configuration\n    googleProjectId: config.googleProjectId,\n    googleRegion: config.googleRegion,\n    processorId: config.processorId,\n    \n    // Informations du document\n    documentId: documentInfo.documentId,\n    fileName: documentInfo.fileName,\n    filePath: storedFile.path || storedFile.fileName,\n    mimeType: documentInfo.mimeType,\n    fileSize: documentInfo.fileSize,\n    \n    // Données binaires pour le transfert\n    binaryDataKey: documentInfo.binaryDataKey,\n    \n    // Chemin complet pour les références futures\n    fullPath: config.storageFolder + documentInfo.documentId + '/' + documentInfo.fileName,\n    \n    // Indique si on doit utiliser le microservice\n    useMicroservice: useMicroservice,\n    \n    // URLs des microservices\n    documentProcessorUrl: config.documentProcessorUrl,\n    \n    // Timestamp pour le suivi\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "name": "Prepare Document Processing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [940, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.useMicroservice }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Use Microservice?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.documentProcessorUrl }}",
+        "method": "POST",
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "documentId",
+              "value": "={{ $json.documentId }}"
+            },
+            {
+              "name": "filePath",
+              "value": "={{ $json.fullPath }}"
+            },
+            {
+              "name": "fileName",
+              "value": "={{ $json.fileName }}"
+            },
+            {
+              "name": "mimeType",
+              "value": "={{ $json.mimeType }}"
+            },
+            {
+              "name": "projectId",
+              "value": "={{ $json.googleProjectId }}"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "name": "Document Processor Microservice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1280, 100]
+    },
+    {
+      "parameters": {
+        "url": "https://documentai.googleapis.com/v1/projects/{{$json.googleProjectId}}/locations/{{$json.googleRegion}}/processors/{{$json.processorId}}:process",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "skipHumanReview",
+              "value": true
+            }
+          ]
+        },
+        "bodyParametersJson": "={{ { \"rawDocument\": { \"content\": $binary[$json.binaryDataKey].base64, \"mimeType\": \"application/pdf\" } } }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "name": "Document AI Extraction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1280, 280],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Google API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traitement de la réponse (Document AI ou Microservice)\n// Vérifions d'abord d'où viennent les données\nlet processedData;\n\nif ($node[\"Document Processor Microservice\"]) {\n  // Données venant du microservice\n  processedData = $node[\"Document Processor Microservice\"].json.body || {};\n} else {\n  // Données venant de Document AI\n  const docAiResponse = $json.body || {};\n  const document = docAiResponse.document || {};\n  \n  // Extraction des blocs de texte\n  let textBlocks = [];\n  let images = [];\n  let imageCounter = 0;\n  \n  // Parcourir les pages et extraire le texte\n  if (document.pages) {\n    for (let i = 0; i < document.pages.length; i++) {\n      const page = document.pages[i];\n      const pageNumber = i + 1;\n      \n      // Extraire les paragraphes\n      if (page.paragraphs) {\n        for (const paragraph of page.paragraphs) {\n          if (paragraph.text) {\n            textBlocks.push({\n              id: `text-${textBlocks.length}`,\n              page: pageNumber,\n              text: paragraph.text,\n              type: 'paragraph',\n              boundingBox: paragraph.layout?.boundingPoly || null\n            });\n          }\n        }\n      }\n      \n      // Extraire les images (si disponibles dans la réponse)\n      if (page.image) {\n        images.push({\n          id: `img-${imageCounter++}`,\n          page: pageNumber,\n          content: page.image.content,\n          mimeType: 'image/png', // Supposons PNG par défaut\n          size: {\n            width: page.dimension?.width || 0,\n            height: page.dimension?.height || 0\n          }\n        });\n      }\n    }\n  }\n  \n  processedData = {\n    textBlocks: textBlocks,\n    images: images,\n    pageCount: document.pages?.length || 0,\n    metadata: {\n      mimeType: document.mimeType,\n      text: document.text,\n      textStyles: document.textStyles || [],\n      entities: document.entities || []\n    }\n  };\n}\n\n// Récupérer des infos du document initial\nconst documentId = $node[\"Prepare Document Processing\"].json.documentId;\nconst fileName = $node[\"Prepare Document Processing\"].json.fileName;\n\n// Résultat traité\nreturn {\n  json: {\n    documentId: documentId,\n    fileName: fileName,\n    processed: true,\n    textBlocks: processedData.textBlocks || [],\n    images: processedData.images || [],\n    pageCount: processedData.pageCount || 0,\n    metadata: processedData.metadata || {}\n  }\n};"
+      },
+      "name": "Process Document Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1460, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $node[\"Config Parameters\"].json.schemaAnalyzerUrl }}",
+        "method": "POST",
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": []
+        },
+        "bodyParametersJson": "={{ { \"documentId\": $json.documentId, \"images\": $json.images } }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "name": "Schema Analyzer Microservice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1660, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traitement des résultats de Schema Analyzer (qui inclut déjà la classification et l'OCR)\nconst analyzerResults = $json.body || {};\nconst classifiedImages = analyzerResults.classifiedImages || [];\n\n// Si le Schema Analyzer n'a pas retourné de résultats, c'est un déploiement partiel\n// utiliser les données d'entrée comme fallback\nlet processedImages = classifiedImages.length > 0 ? classifiedImages : $input.item.json.images;\n\n// Récupérer des infos du document\nconst documentId = $input.item.json.documentId;\nconst fileName = $input.item.json.fileName;\nconst textBlocks = $input.item.json.textBlocks;\nconst metadata = $input.item.json.metadata;\n\n// Statistiques sur les images\nconst stats = {\n  totalImages: processedImages.length,\n  technicalDiagrams: processedImages.filter(img => img.classification === 'technical_diagram').length,\n  decorativeImages: processedImages.filter(img => img.classification !== 'technical_diagram').length,\n  imagesWithText: processedImages.filter(img => img.containsText).length\n};\n\n// Résultat traité\nreturn {\n  json: {\n    documentId: documentId,\n    fileName: fileName,\n    textBlocks: textBlocks,\n    images: processedImages,\n    metadata: metadata,\n    stats: stats\n  }\n};"
+      },
+      "name": "Process Schema Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1840, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $node[\"Config Parameters\"].json.vectorEngineUrl }}/chunk",
+        "method": "POST",
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": []
+        },
+        "bodyParametersJson": "={{ { \"documentId\": $json.documentId, \"textBlocks\": $json.textBlocks } }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "name": "Vector Engine - Chunking",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [2020, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traitement des résultats de chunking\nconst chunkingResults = $json.body || {};\nconst chunks = chunkingResults.chunks || [];\n\n// Si le microservice n'a pas retourné de chunks, utiliser les textBlocks d'origine\nlet textToEmbed = chunks.length > 0 ? \n  chunks.map(chunk => chunk.text) : \n  $input.item.json.textBlocks.map(block => block.text);\n\n// Récupérer les données d'origine\nconst originalData = $input.item.json;\n\nreturn {\n  json: {\n    ...originalData,\n    chunkedText: chunks.length > 0,\n    textToEmbed: textToEmbed,\n    chunks: chunks\n  }\n};"
+      },
+      "name": "Process Chunking Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2200, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $node[\"Config Parameters\"].json.vectorEngineUrl }}/embed",
+        "method": "POST",
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": []
+        },
+        "bodyParametersJson": "={{ { \"documentId\": $json.documentId, \"texts\": $json.textToEmbed } }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "name": "Vector Engine - Embeddings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [2380, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traitement de la réponse du Vector Engine (embeddings)\nconst embeddingsResponse = $json.body || {};\nconst embeddings = embeddingsResponse.embeddings || [];\n\n// Si pas d'embeddings du microservice, on prépare pour l'appel à Voyage AI\nconst useVoyageAI = embeddings.length === 0;\n\n// Récupérer les données d'origine\nconst originalData = $input.item.json;\n\nreturn {\n  json: {\n    ...originalData,\n    embeddings: embeddings,\n    useVoyageAI: useVoyageAI\n  }\n};"
+      },
+      "name": "Process Embeddings Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2560, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.useVoyageAI }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Use Voyage AI?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2740, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://api.voyageai.com/v1/embeddings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": []
+        },
+        "bodyParametersJson": "={{ { \"model\": \"voyage-2\", \"input\": $json.textToEmbed } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "name": "Voyage AI Embeddings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [2900, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2",
+          "name": "Voyage AI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Préparer les données d'embedding pour l'indexation\nlet embeddings = [];\nlet textContent = [];\n\n// Déterminer la source des embeddings\nif ($node[\"Voyage AI Embeddings\"]) {\n  // Données de Voyage AI\n  const voyageResponse = $node[\"Voyage AI Embeddings\"].json.body || {};\n  embeddings = (voyageResponse.data || []).map(item => item.embedding);\n  textContent = $json.textToEmbed;\n} else {\n  // Données du microservice Vector Engine\n  embeddings = $json.embeddings;\n  textContent = $json.chunkedText ? \n    $json.chunks.map(chunk => chunk.text) : \n    $json.textToEmbed;\n}\n\n// Récupérer les données d'origine\nconst documentData = $json;\n\nreturn {\n  json: {\n    ...documentData,\n    embeddingsToIndex: embeddings,\n    contentToIndex: textContent\n  }\n};"
+      },
+      "name": "Prepare Indexing Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [3060, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $node[\"Config Parameters\"].json.vectorEngineUrl }}/index",
+        "method": "POST",
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": []
+        },
+        "bodyParametersJson": "={{ { \"documentId\": $json.documentId, \"fileName\": $json.fileName, \"embeddings\": $json.embeddingsToIndex, \"contents\": $json.contentToIndex, \"metadata\": { \"pageCount\": $json.pageCount || 0 } } }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "name": "Vector Engine - Indexing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [3240, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Préparation des statistiques et de la réponse finale\nconst indexingResults = $json.body || {};\n\n// Récupération des données précédentes\nconst documentData = $input.item.json;\n\nreturn {\n  json: {\n    success: true,\n    documentId: documentData.documentId,\n    fileName: documentData.fileName,\n    processingCompleted: true,\n    timestamp: new Date().toISOString(),\n    stats: {\n      textBlocksCount: documentData.textBlocks?.length || 0,\n      textBlocksIndexed: indexingResults.indexedCount || documentData.textToEmbed?.length || 0,\n      imagesCount: documentData.images?.length || 0,\n      technicalDiagramsCount: documentData.stats?.technicalDiagrams || 0,\n      pageCount: documentData.pageCount || 0\n    },\n    microservicesUsed: {\n      documentProcessor: !!$node[\"Document Processor Microservice\"],\n      schemaAnalyzer: !!$node[\"Schema Analyzer Microservice\"] && documentData.images?.length > 0,\n      vectorEngine: !!$node[\"Vector Engine - Chunking\"] && !!$node[\"Vector Engine - Embeddings\"] && !!$node[\"Vector Engine - Indexing\"],\n      voyageAI: !!$node[\"Voyage AI Embeddings\"]\n    },\n    status: 'indexed',\n    retrievalReady: true\n  }\n};"
+      },
+      "name": "Prepare Final Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [3420, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://frontend:3000/api/notifications",
+        "method": "POST",
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "document_processed"
+            },
+            {
+              "name": "documentId",
+              "value": "={{ $json.documentId }}"
+            },
+            {
+              "name": "fileName",
+              "value": "={{ $json.fileName }}"
+            },
+            {
+              "name": "stats",
+              "value": "={{ $json.stats }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $json.status }}"
+            },
+            {
+              "name": "microservicesUsed",
+              "value": "={{ $json.microservicesUsed }}"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "name": "Notify Frontend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [3600, 200]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify({success: true, document_id: $json.documentId, status: 'processing', message: 'Document accepté et en cours de traitement'}) }}",
+        "responseProperties": {
+          "properties": [
+            {
+              "name": "responseCode",
+              "value": 200
+            }
+          ]
+        }
+      },
+      "name": "Send Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [780, 380]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify({ success: false, errors: $json.errors }) }}",
+        "responseProperties": {
+          "properties": [
+            {
+              "name": "responseCode",
+              "value": 400
+            }
+          ]
+        }
+      },
+      "name": "Send Response Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [780, 520]
+    },
+    {
+      "parameters": {
+        "path": "health",
+        "responseMode": "onReceived",
+        "options": {},
+        "httpMethod": "GET"
+      },
+      "name": "Health Check Endpoint",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 520],
+      "webhookId": "health"
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify({\n  status: 'operational',\n  service: 'TechnicIA Document Ingestion',\n  version: '1.1.0',\n  timestamp: new Date().toISOString(),\n  microservices: {\n    documentProcessor: 'connected',\n    schemaAnalyzer: 'connected',\n    vectorEngine: 'connected'\n  }\n}) }}",
+        "responseProperties": {
+          "properties": [
+            {
+              "name": "responseCode",
+              "value": 200
+            }
+          ]
+        }
+      },
+      "name": "Return Health Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [420, 520]
+    }
+  ],
+  "connections": {
+    "Document Upload Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Document": {
+      "main": [
+        [
+          {
+            "node": "Document Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Valid?": {
+      "main": [
+        [
+          {
+            "node": "Write Binary File",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Config Parameters",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Response Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config Parameters": {
+      "main": [
+        [
+          {
+            "node": "Prepare Document Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Binary File": {
+      "main": [
+        [
+          {
+            "node": "Prepare Document Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Document Processing": {
+      "main": [
+        [
+          {
+            "node": "Use Microservice?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Microservice?": {
+      "main": [
+        [
+          {
+            "node": "Document Processor Microservice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Document AI Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Processor Microservice": {
+      "main": [
+        [
+          {
+            "node": "Process Document Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document AI Extraction": {
+      "main": [
+        [
+          {
+            "node": "Process Document Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Document Results": {
+      "main": [
+        [
+          {
+            "node": "Schema Analyzer Microservice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schema Analyzer Microservice": {
+      "main": [
+        [
+          {
+            "node": "Process Schema Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Schema Results": {
+      "main": [
+        [
+          {
+            "node": "Vector Engine - Chunking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vector Engine - Chunking": {
+      "main": [
+        [
+          {
+            "node": "Process Chunking Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Chunking Results": {
+      "main": [
+        [
+          {
+            "node": "Vector Engine - Embeddings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vector Engine - Embeddings": {
+      "main": [
+        [
+          {
+            "node": "Process Embeddings Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Embeddings Results": {
+      "main": [
+        [
+          {
+            "node": "Use Voyage AI?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Voyage AI?": {
+      "main": [
+        [
+          {
+            "node": "Voyage AI Embeddings",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Indexing Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voyage AI Embeddings": {
+      "main": [
+        [
+          {
+            "node": "Prepare Indexing Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Indexing Data": {
+      "main": [
+        [
+          {
+            "node": "Vector Engine - Indexing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vector Engine - Indexing": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Final Response": {
+      "main": [
+        [
+          {
+            "node": "Notify Frontend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Check Endpoint": {
+      "main": [
+        [
+          {
+            "node": "Return Health Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
