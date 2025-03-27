@@ -33,28 +33,15 @@
     },
     {
       "parameters": {
-        "url": "=http://document-processor:5001/process",
-        "allowUnauthorizedCerts": true,
-        "method": "POST",
-        "bodyParametersUi": {
-          "parameter": [
-            {
-              "name": "document_id",
-              "value": "={{ $json.body.document_id }}"
-            },
-            {
-              "name": "document_path",
-              "value": "={{ $json.body.document_path }}"
-            }
-          ]
-        },
-        "options": {}
+        "content": "={{ JSON.stringify({success: true, message: 'Requête reçue et en cours de traitement'}) }}",
+        "options": {
+          "responseCode": 202
+        }
       },
-      "name": "Process Large Document",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [420, 200],
-      "continueOnFail": true
+      "name": "Return Webhook Acknowledgment",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [440, 360]
     },
     {
       "parameters": {
@@ -82,7 +69,7 @@
       "name": "Process with Document AI",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [420, 400],
+      "position": [600, 300],
       "continueOnFail": true
     },
     {
@@ -92,7 +79,7 @@
       "name": "Process Document Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [600, 300]
+      "position": [780, 300]
     },
     {
       "parameters": {
@@ -107,7 +94,7 @@
       "name": "Extraction Success?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [780, 300]
+      "position": [960, 300]
     },
     {
       "parameters": {
@@ -131,7 +118,7 @@
       "name": "Classify Images with Vision AI",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [960, 240],
+      "position": [1140, 240],
       "continueOnFail": true
     },
     {
@@ -141,7 +128,7 @@
       "name": "Process Vision Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1140, 240]
+      "position": [1320, 240]
     },
     {
       "parameters": {
@@ -150,7 +137,7 @@
       "name": "Prepare Error Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [960, 400]
+      "position": [1140, 400]
     },
     {
       "parameters": {
@@ -186,7 +173,7 @@
       "name": "Send to Vectorization",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1320, 240],
+      "position": [1500, 240],
       "continueOnFail": true
     },
     {
@@ -217,41 +204,22 @@
       "typeVersion": 3,
       "position": [1320, 400],
       "continueOnFail": true
-    },
-    {
-      "parameters": {
-        "content": "={{ JSON.stringify({success: true, message: 'Requête reçue et en cours de traitement'}) }}",
-        "options": {
-          "responseCode": 202
-        }
-      },
-      "name": "Return Webhook Acknowledgment",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [420, 300]
     }
   ],
   "connections": {
     "Large Document Processing Webhook": {
       "main": [
         [
-          {"node": "Process Large Document", "type": "main", "index": 0},
-          {"node": "Return Webhook Acknowledgment", "type": "main", "index": 0}
+          {"node": "Return Webhook Acknowledgment", "type": "main", "index": 0},
+          {"node": "Process with Document AI", "type": "main", "index": 0}
         ]
       ]
     },
     "Standard Document Processing Webhook": {
       "main": [
         [
-          {"node": "Process with Document AI", "type": "main", "index": 0},
-          {"node": "Return Webhook Acknowledgment", "type": "main", "index": 0}
-        ]
-      ]
-    },
-    "Process Large Document": {
-      "main": [
-        [
-          {"node": "Process Document Result", "type": "main", "index": 0}
+          {"node": "Return Webhook Acknowledgment", "type": "main", "index": 0},
+          {"node": "Process with Document AI", "type": "main", "index": 0}
         ]
       ]
     },
