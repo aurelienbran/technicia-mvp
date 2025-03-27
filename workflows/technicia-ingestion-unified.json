@@ -313,7 +313,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [240, 520],
-      "webhookId": "technicia-health"
+      "webhookId": "health"
     },
     {
       "parameters": {
