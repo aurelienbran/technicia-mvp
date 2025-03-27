@@ -4,7 +4,7 @@
     {
       "parameters": {
         "path": "upload",
-        "responseMode": "responseNode",
+        "responseMode": "lastNode",
         "options": {
           "binaryData": true,
           "bodyContentType": "multipart/form-data"
@@ -15,7 +15,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [240, 300],
-      "webhookId": "technicia-upload"
+      "webhookId": "upload"
     },
     {
       "parameters": {
@@ -270,12 +270,12 @@
     },
     {
       "parameters": {
-        "content": "={{ JSON.stringify($json) }}",
+        "content": "={{ JSON.stringify({success: true, document_id: $json.documentId, status: 'processing', message: 'Document accepté et en cours de traitement'}) }}",
         "responseProperties": {
           "properties": [
             {
               "name": "responseCode",
-              "value": "={{ $json.success ? 200 : 400 }}"
+              "value": 200
             }
           ]
         }
