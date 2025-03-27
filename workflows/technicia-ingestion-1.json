@@ -52,16 +52,7 @@
       "name": "Store Document",
       "type": "n8n-nodes-base.executeFunction",
       "typeVersion": 1,
-      "position": [780, 200]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Copie des données pour garder l'information de document_id et document_name\n// Nécessaire pour la réponse utilisateur\n\nreturn {\n  document_id: $json.document_id,\n  document_name: $json.document_name,\n  large_document: $json.large_document,\n  document_size: $json.document_size,\n  timestamp: $json.timestamp\n};"
-      },
-      "name": "Duplicate Document Info",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [780, 300]
+      "position": [780, 220]
     },
     {
       "parameters": {
@@ -77,11 +68,11 @@
       "name": "Document Size Router",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [960, 200]
+      "position": [960, 220]
     },
     {
       "parameters": {
-        "url": "=http://ingestion-service:5000/api/part2/large-document",
+        "url": "=http://document-processor:5001/process",
         "allowUnauthorizedCerts": true,
         "method": "POST",
         "bodyParametersUi": {
@@ -93,19 +84,15 @@
             {
               "name": "document_path",
               "value": "={{ $json.document_id + '/' + $json.document_name }}"
-            },
-            {
-              "name": "document_name", 
-              "value": "={{ $json.document_name }}"
             }
           ]
         },
         "options": {}
       },
-      "name": "Send to Large Document Processing",
+      "name": "Process Large Document",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1140, 120],
+      "position": [1140, 100],
       "continueOnFail": true
     },
     {
@@ -134,21 +121,12 @@
       "name": "Send to Standard Processing",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1140, 280],
+      "position": [1140, 320],
       "continueOnFail": true
     },
     {
       "parameters": {
-        "jsCode": "// Prépare la réponse à l'utilisateur\nreturn {\n  success: true,\n  document_id: $json.document_id,\n  document_name: $json.document_name,\n  status: 'processing',\n  message: 'Document accepté et en cours de traitement',\n  large_document: $json.large_document\n};"
-      },
-      "name": "Prepare Response Data",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [960, 300]
-    },
-    {
-      "parameters": {
-        "content": "={{ JSON.stringify($json) }}",
+        "content": "={{ JSON.stringify({success: true, document_id: $json.document_id, document_name: $json.document_name, status: 'processing', message: 'Document accepté et en cours de traitement'}) }}",
         "options": {
           "responseCode": 200
         }
@@ -156,7 +134,7 @@
       "name": "Return Initial Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1140, 380]
+      "position": [780, 380]
     },
     {
       "parameters": {
@@ -168,7 +146,7 @@
       "name": "Return Validation Error",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [780, 420]
+      "position": [780, 480]
     },
     {
       "parameters": {
@@ -224,7 +202,7 @@
       "main": [
         [
           {"node": "Store Document", "type": "main", "index": 0},
-          {"node": "Duplicate Document Info", "type": "main", "index": 0}
+          {"node": "Return Initial Success", "type": "main", "index": 0}
         ],
         [
           {"node": "Return Validation Error", "type": "main", "index": 0}
@@ -238,27 +216,13 @@
         ]
       ]
     },
-    "Duplicate Document Info": {
-      "main": [
-        [
-          {"node": "Prepare Response Data", "type": "main", "index": 0}
-        ]
-      ]
-    },
     "Document Size Router": {
       "main": [
         [
-          {"node": "Send to Large Document Processing", "type": "main", "index": 0}
+          {"node": "Process Large Document", "type": "main", "index": 0}
         ],
         [
           {"node": "Send to Standard Processing", "type": "main", "index": 0}
-        ]
-      ]
-    },
-    "Prepare Response Data": {
-      "main": [
-        [
-          {"node": "Return Initial Success", "type": "main", "index": 0}
         ]
       ]
     },
