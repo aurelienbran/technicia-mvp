@@ -1,5 +1,5 @@
 {
-  "name": "TechnicIA Ingestion 3 - Vectorisation et finalisation",
+  "name": "TechnicIA Ingestion 3 - Vectorisation et indexation",
   "nodes": [
     {
       "parameters": {
@@ -33,6 +33,18 @@
     },
     {
       "parameters": {
+        "content": "={{ JSON.stringify({success: true, message: 'Requête reçue et en cours de traitement'}) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "name": "Return Webhook Acknowledgment",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [440, 360]
+    },
+    {
+      "parameters": {
         "url": "=http://vector-service:5000/vectorize",
         "allowUnauthorizedCerts": true,
         "method": "POST",
@@ -57,7 +69,7 @@
       "name": "Vectorize Content",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [420, 240],
+      "position": [440, 240],
       "continueOnFail": true
     },
     {
@@ -67,7 +79,7 @@
       "name": "Process Vectorization Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [600, 240]
+      "position": [640, 240]
     },
     {
       "parameters": {
@@ -99,7 +111,7 @@
       "name": "Index in Qdrant",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [780, 240],
+      "position": [840, 240],
       "continueOnFail": true
     },
     {
@@ -109,52 +121,7 @@
       "name": "Process Indexation Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [960, 240]
-    },
-    {
-      "parameters": {
-        "content": "={{ JSON.stringify({success: true, message: 'Requête reçue et en cours de traitement'}) }}",
-        "options": {
-          "responseCode": 202
-        }
-      },
-      "name": "Return Webhook Acknowledgment",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [420, 360]
-    },
-    {
-      "parameters": {
-        "url": "=http://frontend:3000/api/notifications",
-        "allowUnauthorizedCerts": true,
-        "method": "POST",
-        "bodyParametersUi": {
-          "parameter": [
-            {
-              "name": "type",
-              "value": "document_processed"
-            },
-            {
-              "name": "document_id",
-              "value": "={{ $json.document_id }}"
-            },
-            {
-              "name": "document_name",
-              "value": "={{ $json.document_name }}"
-            },
-            {
-              "name": "stats",
-              "value": "={{ JSON.stringify($json.processing_stats) }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "name": "Notify Frontend Success",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [1140, 240],
-      "continueOnFail": true
+      "position": [1040, 240]
     },
     {
       "parameters": {
@@ -163,7 +130,7 @@
       "name": "Process Error",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [420, 480]
+      "position": [440, 480]
     },
     {
       "parameters": {
@@ -174,7 +141,7 @@
           "parameter": [
             {
               "name": "type",
-              "value": "document_error"
+              "value": "={{ $json.success ? 'document_processed' : 'document_error' }}"
             },
             {
               "name": "document_id",
@@ -185,17 +152,17 @@
               "value": "={{ $json.document_name }}"
             },
             {
-              "name": "error",
-              "value": "={{ JSON.stringify($json.error_details) }}"
+              "name": "data",
+              "value": "={{ $json.success ? JSON.stringify($json.processing_stats) : JSON.stringify($json.error_details) }}"
             }
           ]
         },
         "options": {}
       },
-      "name": "Notify Frontend Error",
+      "name": "Notify Frontend",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [600, 480],
+      "position": [1240, 360],
       "continueOnFail": true
     },
     {
@@ -205,7 +172,7 @@
       "name": "Log Activity",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1320, 360]
+      "position": [1440, 360]
     },
     {
       "parameters": {
@@ -214,7 +181,7 @@
       "name": "Workflow End",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1500, 360]
+      "position": [1640, 360]
     }
   ],
   "connections": {
@@ -258,25 +225,18 @@
     "Process Indexation Results": {
       "main": [
         [
-          {"node": "Notify Frontend Success", "type": "main", "index": 0}
-        ]
-      ]
-    },
-    "Notify Frontend Success": {
-      "main": [
-        [
-          {"node": "Log Activity", "type": "main", "index": 0}
+          {"node": "Notify Frontend", "type": "main", "index": 0}
         ]
       ]
     },
     "Process Error": {
       "main": [
         [
-          {"node": "Notify Frontend Error", "type": "main", "index": 0}
+          {"node": "Notify Frontend", "type": "main", "index": 0}
         ]
       ]
     },
-    "Notify Frontend Error": {
+    "Notify Frontend": {
       "main": [
         [
           {"node": "Log Activity", "type": "main", "index": 0}
