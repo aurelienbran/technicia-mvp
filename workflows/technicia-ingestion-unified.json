@@ -1,0 +1,487 @@
+{
+  "name": "TechnicIA - Workflow d'Ingestion Unifié",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "upload",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryData": true,
+          "bodyContentType": "multipart/form-data"
+        },
+        "httpMethod": "POST"
+      },
+      "name": "Document Upload Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "technicia-upload"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Validation du document\nlet errors = [];\nlet documentId = 'doc-' + Date.now(); // ID unique pour ce document\nlet documentData = {};\n\n// Vérifier si nous avons reçu un fichier PDF\nif ($input.item && $input.item.binary) {\n  const keys = Object.keys($input.item.binary);\n  if (keys.length > 0) {\n    const fileData = $input.item.binary[keys[0]];\n    if (fileData) {\n      documentData = {\n        fileName: fileData.fileName || 'document.pdf',\n        mimeType: fileData.mimeType || '',\n        fileSize: fileData.fileSize || 0,\n        data: keys[0] // Clé d'accès à la donnée binaire\n      };\n      \n      // Vérification du type de fichier (doit être PDF)\n      if (documentData.mimeType !== 'application/pdf') {\n        errors.push('Le fichier doit être au format PDF');\n      }\n      \n      // Vérification de la taille maximale (150 Mo)\n      const MAX_SIZE = 150 * 1024 * 1024;\n      if (documentData.fileSize > MAX_SIZE) {\n        errors.push(`Le fichier est trop volumineux (${Math.round(documentData.fileSize / (1024 * 1024))} Mo). Maximum autorisé: 150 Mo`);\n      }\n    } else {\n      errors.push('Données de fichier invalides');\n    }\n  } else {\n    errors.push('Aucune donnée binaire trouvée');\n  }\n} else {\n  errors.push('Aucun fichier n\\'a été téléchargé');\n}\n\n// Résultat de la validation\nreturn {\n  json: {\n    documentId: documentId,\n    fileName: documentData.fileName,\n    fileSize: documentData.fileSize,\n    mimeType: documentData.mimeType,\n    errors: errors,\n    isValid: errors.length === 0,\n    timestamp: new Date().toISOString(),\n    binaryDataKey: documentData.data || null\n  }\n};"
+      },
+      "name": "Validate Document",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isValid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Document Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuration - serait normalement dans un fichier .env ou des credentials\nreturn {\n  json: {\n    googleProjectId: 'technicia-docs',\n    googleRegion: 'us',\n    processorId: 'abc123456789',\n    ...$input.item.json\n  }\n};"
+      },
+      "name": "Config Parameters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [780, 300]
+    },
+    {
+      "parameters": {
+        "functionName": "writeBinaryFile",
+        "fileName": "={{ $json.documentId + '/' + $json.fileName }}",
+        "fileContent": "={{ $binary[$json.binaryDataKey] }}"
+      },
+      "name": "Store Document",
+      "type": "n8n-nodes-base.executeFunction",
+      "typeVersion": 1,
+      "position": [780, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://documentai.googleapis.com/v1/projects/{{$node[\"Config Parameters\"].json.googleProjectId}}/locations/{{$node[\"Config Parameters\"].json.googleRegion}}/processors/{{$node[\"Config Parameters\"].json.processorId}}:process",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "skipHumanReview",
+              "value": true
+            }
+          ]
+        },
+        "bodyParametersJson": "={{ { \"rawDocument\": { \"content\": $binary[$node[\"Validate Document\"].json.binaryDataKey].base64, \"mimeType\": \"application/pdf\" } } }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "name": "Document AI Extraction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [960, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Google API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traitement de la réponse de Document AI\nconst docAiResponse = $json.body || {};\nconst document = docAiResponse.document || {};\n\n// Extraction des blocs de texte\nlet textBlocks = [];\nlet images = [];\nlet imageCounter = 0;\n\n// Parcourir les pages et extraire le texte\nif (document.pages) {\n  for (let i = 0; i < document.pages.length; i++) {\n    const page = document.pages[i];\n    const pageNumber = i + 1;\n    \n    // Extraire les paragraphes\n    if (page.paragraphs) {\n      for (const paragraph of page.paragraphs) {\n        if (paragraph.text) {\n          textBlocks.push({\n            id: `text-${textBlocks.length}`,\n            page: pageNumber,\n            text: paragraph.text,\n            type: 'paragraph',\n            boundingBox: paragraph.layout?.boundingPoly || null\n          });\n        }\n      }\n    }\n    \n    // Extraire les images (si disponibles dans la réponse)\n    if (page.image) {\n      images.push({\n        id: `img-${imageCounter++}`,\n        page: pageNumber,\n        content: page.image.content,\n        mimeType: 'image/png', // Supposons PNG par défaut\n        size: {\n          width: page.dimension?.width || 0,\n          height: page.dimension?.height || 0\n        }\n      });\n    }\n  }\n}\n\n// Récupérer des infos du document initial\nconst documentId = $node[\"Validate Document\"].json.documentId;\nconst fileName = $node[\"Validate Document\"].json.fileName;\n\n// Résultat traité\nreturn {\n  json: {\n    documentId: documentId,\n    fileName: fileName,\n    processed: true,\n    textBlocks: textBlocks,\n    images: images,\n    pageCount: document.pages?.length || 0,\n    metadata: {\n      mimeType: document.mimeType,\n      text: document.text,\n      textStyles: document.textStyles || [],\n      entities: document.entities || []\n    }\n  }\n};"
+      },
+      "name": "Process Document AI Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1140, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://vision.googleapis.com/v1/images:annotate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": []
+        },
+        "bodyParametersJson": "={{ { \"requests\": $json.images.map(img => ({ \"image\": { \"content\": img.content }, \"features\": [ { \"type\": \"LABEL_DETECTION\", \"maxResults\": 10 }, { \"type\": \"TEXT_DETECTION\" } ] })) } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "name": "Vision AI Classification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1320, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Google API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traitement des résultats de Vision AI\nconst visionResponses = $json.body?.responses || [];\nconst inputImages = $input.item.json.images || [];\n\n// Enrichir les images avec la classification et le texte\nconst classifiedImages = inputImages.map((image, index) => {\n  const visionResult = visionResponses[index] || {};\n  \n  // Récupérer les labels\n  const labels = visionResult.labelAnnotations || [];\n  \n  // Déterminer si c'est un schéma technique basé sur les labels\n  const technicalLabelKeywords = ['diagram', 'schematic', 'blueprint', 'technical', 'circuit', 'engineering'];\n  const hasTechnicalLabels = labels.some(label => {\n    return technicalLabelKeywords.some(keyword => \n      label.description.toLowerCase().includes(keyword));\n  });\n  \n  // Récupérer le texte OCR si présent\n  const ocrText = visionResult.textAnnotations?.[0]?.description || '';\n  \n  return {\n    ...image,\n    classification: hasTechnicalLabels ? 'technical_diagram' : 'decorative',\n    confidence: hasTechnicalLabels ? \n      labels.find(l => technicalLabelKeywords.some(k => l.description.toLowerCase().includes(k)))?.score || 0.5 : \n      0,\n    labels: labels.map(l => ({ description: l.description, score: l.score })),\n    ocrText: ocrText,\n    containsText: ocrText.length > 0\n  };\n});\n\n// Récupérer des infos du document\nconst documentId = $input.item.json.documentId;\nconst fileName = $input.item.json.fileName;\nconst textBlocks = $input.item.json.textBlocks;\nconst metadata = $input.item.json.metadata;\n\n// Résultat traité\nreturn {\n  json: {\n    documentId: documentId,\n    fileName: fileName,\n    textBlocks: textBlocks,\n    images: classifiedImages,\n    metadata: metadata,\n    stats: {\n      totalImages: classifiedImages.length,\n      technicalDiagrams: classifiedImages.filter(img => img.classification === 'technical_diagram').length,\n      decorativeImages: classifiedImages.filter(img => img.classification !== 'technical_diagram').length,\n      imagesWithText: classifiedImages.filter(img => img.containsText).length\n    }\n  }\n};"
+      },
+      "name": "Process Vision AI Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1500, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://api.voyageai.com/v1/embeddings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": []
+        },
+        "bodyParametersJson": "={{ { \"model\": \"voyage-2\", \"input\": $json.textBlocks.map(block => block.text) } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "name": "Generate Text Embeddings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1680, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2",
+          "name": "Voyage AI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "http://qdrant:6333/collections/technicia/points/batch",
+        "method": "PUT",
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": []
+        },
+        "bodyParametersJson": "={{ { \"points\": $json.body.data.map((embedding, index) => ({ \"id\": $input.item.json.documentId + '-text-' + index, \"vector\": embedding.embedding, \"payload\": { \"type\": \"text\", \"content\": $input.item.json.textBlocks[index].text, \"page\": $input.item.json.textBlocks[index].page, \"document_id\": $input.item.json.documentId, \"document_name\": $input.item.json.fileName } })) } }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "name": "Index Text in Qdrant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1860, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Préparation des statistiques et de la réponse finale\nconst textIndexingResults = $json || {};\nconst textStats = textIndexingResults.body?.result?.status || {};\n\n// Récupération des données précédentes\nconst documentData = $input.item.json;\n\nreturn {\n  json: {\n    success: true,\n    documentId: documentData.documentId,\n    fileName: documentData.fileName,\n    processingCompleted: true,\n    timestamp: new Date().toISOString(),\n    stats: {\n      textBlocksCount: documentData.textBlocks.length,\n      textBlocksIndexed: textStats.processed || documentData.textBlocks.length,\n      imagesCount: documentData.images.length,\n      technicalDiagramsCount: documentData.stats?.technicalDiagrams || 0,\n      pageCount: documentData.metadata?.pageCount || 0\n    },\n    status: 'indexed',\n    retrievalReady: true\n  }\n};"
+      },
+      "name": "Prepare Final Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2040, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://frontend:3000/api/notifications",
+        "method": "POST",
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "document_processed"
+            },
+            {
+              "name": "documentId",
+              "value": "={{ $json.documentId }}"
+            },
+            {
+              "name": "fileName",
+              "value": "={{ $json.fileName }}"
+            },
+            {
+              "name": "stats",
+              "value": "={{ $json.stats }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $json.status }}"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "name": "Notify Frontend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [2220, 200]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify($json) }}",
+        "responseProperties": {
+          "properties": [
+            {
+              "name": "responseCode",
+              "value": "={{ $json.success ? 200 : 400 }}"
+            }
+          ]
+        }
+      },
+      "name": "Send Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [780, 380]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify({ success: false, errors: $json.errors }) }}",
+        "responseProperties": {
+          "properties": [
+            {
+              "name": "responseCode",
+              "value": 400
+            }
+          ]
+        }
+      },
+      "name": "Send Response Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [780, 520]
+    },
+    {
+      "parameters": {
+        "path": "health",
+        "responseMode": "onReceived",
+        "options": {},
+        "httpMethod": "GET"
+      },
+      "name": "Health Check Endpoint",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 520],
+      "webhookId": "technicia-health"
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify({\n  status: 'operational',\n  service: 'TechnicIA Document Ingestion',\n  version: '1.0.0',\n  timestamp: new Date().toISOString()\n}) }}",
+        "responseProperties": {
+          "properties": [
+            {
+              "name": "responseCode",
+              "value": 200
+            }
+          ]
+        }
+      },
+      "name": "Return Health Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [420, 520]
+    }
+  ],
+  "connections": {
+    "Document Upload Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Document": {
+      "main": [
+        [
+          {
+            "node": "Document Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Valid?": {
+      "main": [
+        [
+          {
+            "node": "Store Document",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Config Parameters",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Response Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config Parameters": {
+      "main": [
+        [
+          {
+            "node": "Document AI Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Document": {
+      "main": [
+        [
+          {
+            "node": "Document AI Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document AI Extraction": {
+      "main": [
+        [
+          {
+            "node": "Process Document AI Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Document AI Results": {
+      "main": [
+        [
+          {
+            "node": "Vision AI Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vision AI Classification": {
+      "main": [
+        [
+          {
+            "node": "Process Vision AI Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Vision AI Results": {
+      "main": [
+        [
+          {
+            "node": "Generate Text Embeddings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Text Embeddings": {
+      "main": [
+        [
+          {
+            "node": "Index Text in Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Index Text in Qdrant": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Final Response": {
+      "main": [
+        [
+          {
+            "node": "Notify Frontend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Check Endpoint": {
+      "main": [
+        [
+          {
+            "node": "Return Health Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
