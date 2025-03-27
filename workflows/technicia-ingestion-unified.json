@@ -44,7 +44,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Configuration - serait normalement dans un fichier .env ou des credentials\nreturn {\n  json: {\n    googleProjectId: 'technicia-docs',\n    googleRegion: 'us',\n    processorId: 'abc123456789',\n    ...$input.item.json\n  }\n};"
+        "jsCode": "// Configuration - serait normalement dans un fichier .env ou des credentials\nreturn {\n  json: {\n    googleProjectId: 'technicia-docs',\n    googleRegion: 'us',\n    processorId: 'abc123456789',\n    storageFolder: '/tmp/technicia-docs/',\n    ...$input.item.json\n  }\n};"
       },
       "name": "Config Parameters",
       "type": "n8n-nodes-base.code",
@@ -53,18 +53,29 @@
     },
     {
       "parameters": {
-        "functionName": "writeBinaryFile",
-        "fileName": "={{ $json.documentId + '/' + $json.fileName }}",
-        "fileContent": "={{ $binary[$json.binaryDataKey] }}"
+        "fileName": "={{ $node[\"Config Parameters\"].json.storageFolder + $json.documentId + '/' + $json.fileName }}",
+        "binaryPropertyName": "={{ $json.binaryDataKey }}",
+        "options": {
+          "createParentPath": true
+        }
       },
-      "name": "Store Document",
-      "type": "n8n-nodes-base.executeFunction",
+      "name": "Write Binary File",
+      "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
       "position": [780, 200]
     },
     {
       "parameters": {
-        "url": "https://documentai.googleapis.com/v1/projects/{{$node[\"Config Parameters\"].json.googleProjectId}}/locations/{{$node[\"Config Parameters\"].json.googleRegion}}/processors/{{$node[\"Config Parameters\"].json.processorId}}:process",
+        "jsCode": "// Préparer les données pour l'appel à Document AI\n// Combine les résultats du fichier stocké et des paramètres de configuration\n\n// Récupérer les données de configuration\nconst config = $node[\"Config Parameters\"].json;\n\n// Récupérer les données du document\nconst documentInfo = $node[\"Validate Document\"].json;\n\n// Récupérer les informations du fichier stocké\nconst storedFile = $input.item.json;\n\nreturn {\n  json: {\n    // Paramètres de configuration\n    googleProjectId: config.googleProjectId,\n    googleRegion: config.googleRegion,\n    processorId: config.processorId,\n    \n    // Informations du document\n    documentId: documentInfo.documentId,\n    fileName: documentInfo.fileName,\n    filePath: storedFile.path || storedFile.fileName,\n    mimeType: documentInfo.mimeType,\n    \n    // Données binaires pour le transfert\n    binaryDataKey: documentInfo.binaryDataKey,\n    \n    // Chemin complet pour les références futures\n    fullPath: config.storageFolder + documentInfo.documentId + '/' + documentInfo.fileName,\n    \n    // Timestamp pour le suivi\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "name": "Prepare Document Processing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [960, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://documentai.googleapis.com/v1/projects/{{$json.googleProjectId}}/locations/{{$json.googleRegion}}/processors/{{$json.processorId}}:process",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "method": "POST",
@@ -80,7 +91,7 @@
             }
           ]
         },
-        "bodyParametersJson": "={{ { \"rawDocument\": { \"content\": $binary[$node[\"Validate Document\"].json.binaryDataKey].base64, \"mimeType\": \"application/pdf\" } } }}",
+        "bodyParametersJson": "={{ { \"rawDocument\": { \"content\": $binary[$json.binaryDataKey].base64, \"mimeType\": \"application/pdf\" } } }}",
         "options": {
           "allowUnauthorizedCerts": true,
           "response": {
@@ -93,7 +104,7 @@
       "name": "Document AI Extraction",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 2,
-      "position": [960, 200],
+      "position": [1140, 200],
       "credentials": {
         "httpHeaderAuth": {
           "id": "1",
@@ -103,12 +114,12 @@
     },
     {
       "parameters": {
-        "jsCode": "// Traitement de la réponse de Document AI\nconst docAiResponse = $json.body || {};\nconst document = docAiResponse.document || {};\n\n// Extraction des blocs de texte\nlet textBlocks = [];\nlet images = [];\nlet imageCounter = 0;\n\n// Parcourir les pages et extraire le texte\nif (document.pages) {\n  for (let i = 0; i < document.pages.length; i++) {\n    const page = document.pages[i];\n    const pageNumber = i + 1;\n    \n    // Extraire les paragraphes\n    if (page.paragraphs) {\n      for (const paragraph of page.paragraphs) {\n        if (paragraph.text) {\n          textBlocks.push({\n            id: `text-${textBlocks.length}`,\n            page: pageNumber,\n            text: paragraph.text,\n            type: 'paragraph',\n            boundingBox: paragraph.layout?.boundingPoly || null\n          });\n        }\n      }\n    }\n    \n    // Extraire les images (si disponibles dans la réponse)\n    if (page.image) {\n      images.push({\n        id: `img-${imageCounter++}`,\n        page: pageNumber,\n        content: page.image.content,\n        mimeType: 'image/png', // Supposons PNG par défaut\n        size: {\n          width: page.dimension?.width || 0,\n          height: page.dimension?.height || 0\n        }\n      });\n    }\n  }\n}\n\n// Récupérer des infos du document initial\nconst documentId = $node[\"Validate Document\"].json.documentId;\nconst fileName = $node[\"Validate Document\"].json.fileName;\n\n// Résultat traité\nreturn {\n  json: {\n    documentId: documentId,\n    fileName: fileName,\n    processed: true,\n    textBlocks: textBlocks,\n    images: images,\n    pageCount: document.pages?.length || 0,\n    metadata: {\n      mimeType: document.mimeType,\n      text: document.text,\n      textStyles: document.textStyles || [],\n      entities: document.entities || []\n    }\n  }\n};"
+        "jsCode": "// Traitement de la réponse de Document AI\nconst docAiResponse = $json.body || {};\nconst document = docAiResponse.document || {};\n\n// Extraction des blocs de texte\nlet textBlocks = [];\nlet images = [];\nlet imageCounter = 0;\n\n// Parcourir les pages et extraire le texte\nif (document.pages) {\n  for (let i = 0; i < document.pages.length; i++) {\n    const page = document.pages[i];\n    const pageNumber = i + 1;\n    \n    // Extraire les paragraphes\n    if (page.paragraphs) {\n      for (const paragraph of page.paragraphs) {\n        if (paragraph.text) {\n          textBlocks.push({\n            id: `text-${textBlocks.length}`,\n            page: pageNumber,\n            text: paragraph.text,\n            type: 'paragraph',\n            boundingBox: paragraph.layout?.boundingPoly || null\n          });\n        }\n      }\n    }\n    \n    // Extraire les images (si disponibles dans la réponse)\n    if (page.image) {\n      images.push({\n        id: `img-${imageCounter++}`,\n        page: pageNumber,\n        content: page.image.content,\n        mimeType: 'image/png', // Supposons PNG par défaut\n        size: {\n          width: page.dimension?.width || 0,\n          height: page.dimension?.height || 0\n        }\n      });\n    }\n  }\n}\n\n// Récupérer des infos du document initial\nconst documentId = $node[\"Prepare Document Processing\"].json.documentId;\nconst fileName = $node[\"Prepare Document Processing\"].json.fileName;\n\n// Résultat traité\nreturn {\n  json: {\n    documentId: documentId,\n    fileName: fileName,\n    processed: true,\n    textBlocks: textBlocks,\n    images: images,\n    pageCount: document.pages?.length || 0,\n    metadata: {\n      mimeType: document.mimeType,\n      text: document.text,\n      textStyles: document.textStyles || [],\n      entities: document.entities || []\n    }\n  }\n};"
       },
       "name": "Process Document AI Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1140, 200]
+      "position": [1320, 200]
     },
     {
       "parameters": {
@@ -136,7 +147,7 @@
       "name": "Vision AI Classification",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 2,
-      "position": [1320, 200],
+      "position": [1500, 200],
       "credentials": {
         "httpHeaderAuth": {
           "id": "1",
@@ -151,7 +162,7 @@
       "name": "Process Vision AI Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1500, 200]
+      "position": [1680, 200]
     },
     {
       "parameters": {
@@ -179,7 +190,7 @@
       "name": "Generate Text Embeddings",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 2,
-      "position": [1680, 200],
+      "position": [1860, 200],
       "credentials": {
         "httpHeaderAuth": {
           "id": "2",
@@ -208,7 +219,7 @@
       "name": "Index Text in Qdrant",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 2,
-      "position": [1860, 200]
+      "position": [2040, 200]
     },
     {
       "parameters": {
@@ -217,7 +228,7 @@
       "name": "Prepare Final Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [2040, 200]
+      "position": [2220, 200]
     },
     {
       "parameters": {
@@ -255,7 +266,7 @@
       "name": "Notify Frontend",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 2,
-      "position": [2220, 200]
+      "position": [2400, 200]
     },
     {
       "parameters": {
@@ -349,7 +360,7 @@
       "main": [
         [
           {
-            "node": "Store Document",
+            "node": "Write Binary File",
             "type": "main",
             "index": 0
           },
@@ -377,14 +388,25 @@
       "main": [
         [
           {
-            "node": "Document AI Extraction",
+            "node": "Prepare Document Processing",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Store Document": {
+    "Write Binary File": {
+      "main": [
+        [
+          {
+            "node": "Prepare Document Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Document Processing": {
       "main": [
         [
           {
