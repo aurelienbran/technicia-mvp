@@ -15,7 +15,7 @@ services:
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       - N8N_LOG_LEVEL=info
       - N8N_SECURE_COOKIE=false
-      - N8N_PAYLOAD_SIZE_MAX=150MB
+      - N8N_PAYLOAD_SIZE_MAX=200
     volumes:
       - ./n8n/data:/home/node/.n8n
       - ../scripts:/home/node/scripts
