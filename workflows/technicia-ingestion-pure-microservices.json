@@ -44,10 +44,10 @@
     },
     {
       "parameters": {
-        "filePath": "={{ $json.fullPath }}",
+        "fileName": "={{ $json.fullPath }}",
         "binaryPropertyName": "={{ $json.binaryProperty }}",
         "options": {
-          "createDirectory": true
+          "createParentPath": true
         }
       },
       "name": "Write File",
