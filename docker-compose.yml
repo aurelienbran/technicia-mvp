@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  # Base de données vectorielle
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    networks:
+      - technicia_network
+    environment:
+      - QDRANT_ALLOW_CORS=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Service de traitement des documents
+  document-processor:
+    build:
+      context: ./services/document-processor
+    volumes:
+      - shared_data:/tmp/technicia-docs
+    ports:
+      - "8001:8001"
+    networks:
+      - technicia_network
+    environment:
+      - DOCUMENT_AI_PROJECT=${DOCUMENT_AI_PROJECT}
+      - DOCUMENT_AI_LOCATION=${DOCUMENT_AI_LOCATION}
+      - DOCUMENT_AI_PROCESSOR_ID=${DOCUMENT_AI_PROCESSOR_ID}
+      - TEMP_DIR=/tmp/technicia-docs
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/google-credentials.json
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Service d'analyse des schémas
+  schema-analyzer:
+    build:
+      context: ./services/schema-analyzer
+    volumes:
+      - shared_data:/tmp/technicia-docs
+    ports:
+      - "8002:8002"
+    networks:
+      - technicia_network
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/google-credentials.json
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Service de vectorisation
+  vector-engine:
+    build:
+      context: ./services/vector-engine
+    volumes:
+      - shared_data:/tmp/technicia-docs
+    ports:
+      - "8003:8003"
+    networks:
+      - technicia_network
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - COLLECTION_NAME=technicia
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Orchestrateur n8n
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - shared_data:/tmp/technicia-docs
+    networks:
+      - technicia_network
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD}
+      - NODE_ENV=production
+    depends_on:
+      document-processor:
+        condition: service_healthy
+      schema-analyzer:
+        condition: service_healthy
+      vector-engine:
+        condition: service_healthy
+
+  # Frontend (pour le MVP)
+  frontend:
+    image: nginx:alpine
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    ports:
+      - "3000:80"
+    networks:
+      - technicia_network
+
+networks:
+  technicia_network:
+    driver: bridge
+
+volumes:
+  qdrant_data:
+  n8n_data:
+  shared_data:
