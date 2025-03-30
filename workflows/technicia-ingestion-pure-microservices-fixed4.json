@@ -1,0 +1,547 @@
+{
+  "name": "TechnicIA - Workflow d'Ingestion 100% Microservices (Fixed 4)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "upload",
+        "responseMode": "lastNode",
+        "options": {
+          "binaryData": true,
+          "bodyContentType": "multipart/form-data"
+        },
+        "httpMethod": "POST"
+      },
+      "name": "Document Upload Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "upload"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Récupération des informations du fichier uploadé et validation basique\nconst documentId = 'doc-' + Date.now();\nlet errors = [];\nlet binaryData = null;\nlet fileName = 'document.pdf';\nlet fileSize = 0;\nlet binaryProperty = null;\n\n// Vérifier si nous avons reçu un fichier\nif ($input.item && $input.item.binary) {\n  const keys = Object.keys($input.item.binary);\n  if (keys.length > 0) {\n    binaryProperty = keys[0]; // Sauvegarde de la clé binaire\n    const fileData = $input.item.binary[keys[0]];\n    if (fileData) {\n      binaryData = fileData;\n      fileName = fileData.fileName || 'document.pdf';\n      fileSize = fileData.fileSize || 0;\n      \n      // Assurons-nous que le nom de fichier a l'extension .pdf\n      if (!fileName.toLowerCase().endsWith('.pdf')) {\n        fileName += '.pdf';\n      }\n      \n      // Vérification de la taille maximale (200 Mo)\n      const MAX_SIZE = 200 * 1024 * 1024;\n      if (fileSize > MAX_SIZE) {\n        errors.push(`Le fichier est trop volumineux (${Math.round(fileSize / (1024 * 1024))} Mo). Maximum autorisé: 200 Mo`);\n      }\n    } else {\n      errors.push('Données de fichier invalides');\n    }\n  } else {\n    errors.push('Aucune donnée binaire trouvée');\n  }\n} else {\n  errors.push('Aucun fichier n\\'a été téléchargé');\n}\n\n// Informations de base pour le débogage\nconsole.log('Détails du fichier:', { \n  fileName, \n  fileSize: fileSize ? (fileSize / (1024 * 1024)).toFixed(2) + ' MB' : 'N/A' \n});\n\n// Configuration globale - Utiliser un chemin qui existe certainement\nconst config = {\n  // Utiliser directement /tmp qui existe déjà sur presque tous les systèmes\n  storageFolder: '/tmp/',\n  documentProcessorUrl: 'http://document-processor:8001/api/process',\n  schemaAnalyzerUrl: 'http://schema-analyzer:8002/api/analyze',\n  vectorEngineUrl: 'http://vector-engine:8003/api/vectorize',\n  diagnosisEngineUrl: 'http://diagnosis-engine:8004/api/diagnose',\n  environment: 'production',\n  version: '1.0.0'\n};\n\n// Créer le chemin complet du fichier - Plus simple\nconst uniqueFileName = documentId + '-' + fileName;\nconst fullPath = config.storageFolder + uniqueFileName;\n\n// Récupérer les données binaires pour les passer au prochain nœud\nconst inputBinary = $input.item.binary || {};\n\n// Résultat validé\nreturn {\n  json: {\n    documentId,\n    fileName,\n    uniqueFileName,\n    fileSize,\n    mimeType: 'application/pdf', // On force le type MIME à PDF\n    errors,\n    isValid: errors.length === 0,\n    timestamp: new Date().toISOString(),\n    // Données binaires\n    binaryProperty, // La variable est maintenant définie en dehors des conditions\n    // Chemins\n    storageFolder: config.storageFolder,\n    fullPath,\n    // URLs microservices\n    documentProcessorUrl: config.documentProcessorUrl,\n    schemaAnalyzerUrl: config.schemaAnalyzerUrl,\n    vectorEngineUrl: config.vectorEngineUrl\n  },\n  // Passer les données binaires telles quelles\n  binary: inputBinary\n};"
+      },
+      "name": "Validate and Configure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isValid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Document Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Renommer les données binaires pour qu'elles soient accessibles sous le nom 'data'\nconst output = {};\n\n// Copier toutes les propriétés JSON\noutput.json = {...$input.item.json};\n\n// Préparer l'objet binaire\noutput.binary = {};\n\n// Vérifier si des données binaires sont disponibles\nif ($input.item.binary) {\n  const binaryKeys = Object.keys($input.item.binary);\n  \n  if (binaryKeys.length > 0) {\n    // Récupérer les données binaires de la première clé disponible\n    const firstBinaryKey = binaryKeys[0];\n    \n    // Assigner ces données à la clé 'data' pour le nœud Write Binary File\n    output.binary.data = $input.item.binary[firstBinaryKey];\n    \n    console.log(`Données binaires renommées: ${firstBinaryKey} -> data`);\n  } else {\n    console.log('Aucune donnée binaire disponible à renommer');\n  }\n}\n\nreturn output;"
+      },
+      "name": "Rename Binary Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [760, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// S'assurer que le répertoire existe (mais /tmp existe généralement déjà)\nconst fs = $node.fs;\nconst path = $node.path;\n\nconst storageFolder = $input.item.json.storageFolder;\n\ntry {\n  // Vérifier si le répertoire existe\n  if (!fs.existsSync(storageFolder)) {\n    // Créer le répertoire si nécessaire\n    fs.mkdirSync(storageFolder, { recursive: true });\n    console.log(`Répertoire créé: ${storageFolder}`);\n  } else {\n    console.log(`Répertoire existant: ${storageFolder}`);\n  }\n} catch (error) {\n  console.error(`Erreur lors de la vérification/création du répertoire: ${error.message}`);\n  // Continuer quand même car /tmp existe généralement\n}\n\n// Passer les données au nœud suivant sans modification\nreturn $input.item;"
+      },
+      "name": "Ensure Directory Exists",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "fileName": "={{ $json.fullPath }}",
+        "options": {}
+      },
+      "name": "Write Binary File",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1040, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.documentProcessorUrl }}",
+        "method": "POST",
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "documentId",
+              "value": "={{ $json.documentId }}"
+            },
+            {
+              "name": "filePath",
+              "value": "={{ $json.fullPath }}"
+            },
+            {
+              "name": "fileName",
+              "value": "={{ $json.fileName }}"
+            },
+            {
+              "name": "mimeType",
+              "value": "={{ $json.mimeType }}"
+            },
+            {
+              "name": "outputPath",
+              "value": "={{ $json.storageFolder }}"
+            },
+            {
+              "name": "extractImages",
+              "value": true
+            },
+            {
+              "name": "extractText",
+              "value": true
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "name": "Document Processor Service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1180, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Préparation de l'analyse des schémas\n// Récupérer les résultats du Document Processor\nconst docProcessorResults = $json.body || {};\n\n// Vérifier si le Document Processor a bien fonctionné\nif (!docProcessorResults.success) {\n  throw new Error(`Document Processor failed: ${docProcessorResults.message || 'Unknown error'}`);\n}\n\n// Récupérer les données du document\nconst documentInfo = $input.item.json;\n\n// Extraire les informations nécessaires\nconst documentId = documentInfo.documentId;\nconst extractedImages = docProcessorResults.images || [];\nconst storageFolder = documentInfo.storageFolder;\n\n// Préparation des données pour Schema Analyzer\nreturn {\n  json: {\n    // Paramètres du document\n    documentId,\n    storageFolder,\n    // URLs microservices\n    schemaAnalyzerUrl: documentInfo.schemaAnalyzerUrl,\n    vectorEngineUrl: documentInfo.vectorEngineUrl,\n    // Données extraites par Document Processor\n    images: extractedImages.map(img => ({\n      id: img.id,\n      path: img.path,\n      page: img.page,\n      width: img.width,\n      height: img.height\n    })),\n    textBlocks: docProcessorResults.textBlocks || [],\n    pageCount: docProcessorResults.pageCount || 0,\n    metadata: docProcessorResults.metadata || {},\n    // Autres informations\n    fileName: documentInfo.fileName,\n    fullPath: documentInfo.fullPath,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "name": "Process Document Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.schemaAnalyzerUrl }}",
+        "method": "POST",
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": []
+        },
+        "bodyParametersJson": "={{ { \"documentId\": $json.documentId, \"images\": $json.images, \"storageFolder\": $json.storageFolder } }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "name": "Schema Analyzer Service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traitement des résultats de Schema Analyzer\nconst analyzerResults = $json.body || {};\n\n// Vérifier si le Schema Analyzer a bien fonctionné\nif (!analyzerResults.success) {\n  throw new Error(`Schema Analyzer failed: ${analyzerResults.message || 'Unknown error'}`);\n}\n\n// Récupérer les données du document\nconst documentInfo = $input.item.json;\n\n// Extraire les informations nécessaires\nconst documentId = documentInfo.documentId;\nconst textBlocks = documentInfo.textBlocks;\nconst pageCount = documentInfo.pageCount;\nconst metadata = documentInfo.metadata;\nconst processedImages = analyzerResults.images || [];\n\n// Statistiques sur les images\nconst stats = {\n  totalImages: processedImages.length,\n  technicalDiagrams: processedImages.filter(img => img.classification === 'technical_diagram').length,\n  decorativeImages: processedImages.filter(img => img.classification !== 'technical_diagram').length,\n  imagesWithText: processedImages.filter(img => img.ocrText && img.ocrText.length > 0).length\n};\n\n// Préparation des données pour Vector Engine\nreturn {\n  json: {\n    documentId,\n    vectorEngineUrl: documentInfo.vectorEngineUrl,\n    textBlocks,\n    images: processedImages,\n    metadata: {\n      ...metadata,\n      pageCount,\n      imageStats: stats\n    },\n    fileName: documentInfo.fileName,\n    fullPath: documentInfo.fullPath,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "name": "Process Schema Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1600, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.vectorEngineUrl }}/process",
+        "method": "POST",
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": []
+        },
+        "bodyParametersJson": "={{ { \"documentId\": $json.documentId, \"textBlocks\": $json.textBlocks, \"images\": $json.images.filter(img => img.classification === 'technical_diagram'), \"metadata\": $json.metadata } }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "name": "Vector Engine Service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1740, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Préparation des statistiques et de la réponse finale\nconst vectorEngineResults = $json.body || {};\n\n// Vérifier si le Vector Engine a bien fonctionné\nif (!vectorEngineResults.success) {\n  throw new Error(`Vector Engine failed: ${vectorEngineResults.message || 'Unknown error'}`);\n}\n\n// Récupérer les informations\nconst documentInfo = $input.item.json;\nconst documentId = documentInfo.documentId;\nconst fileName = documentInfo.fileName;\nconst metadata = documentInfo.metadata || {};\nconst imageStats = metadata.imageStats || {};\n\n// Récupérer les statistiques du Vector Engine\nconst vectorStats = vectorEngineResults.stats || {};\n\nreturn {\n  json: {\n    success: true,\n    documentId,\n    fileName,\n    processingCompleted: true,\n    timestamp: new Date().toISOString(),\n    stats: {\n      textBlocksCount: vectorStats.totalTextBlocks || documentInfo.textBlocks?.length || 0,\n      chunksCreated: vectorStats.chunksCount || 0,\n      vectorsIndexed: vectorStats.indexedCount || 0,\n      imagesCount: imageStats.totalImages || documentInfo.images?.length || 0,\n      technicalDiagramsCount: imageStats.technicalDiagrams || 0,\n      pageCount: metadata.pageCount || 0\n    },\n    microservicesUsed: {\n      documentProcessor: true,\n      schemaAnalyzer: true,\n      vectorEngine: true\n    },\n    status: 'indexed',\n    retrievalReady: true,\n    searchUrl: vectorEngineResults.searchEndpoint || null\n  }\n};"
+      },
+      "name": "Prepare Final Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1880, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://frontend:3000/api/notifications",
+        "method": "POST",
+        "bodyContentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "document_processed"
+            },
+            {
+              "name": "documentId",
+              "value": "={{ $json.documentId }}"
+            },
+            {
+              "name": "fileName",
+              "value": "={{ $json.fileName }}"
+            },
+            {
+              "name": "stats",
+              "value": "={{ $json.stats }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $json.status }}"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "name": "Notify Frontend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [2020, 300]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify({success: true, document_id: $json.documentId, status: 'processing', message: 'Document accepté et en cours de traitement'}) }}",
+        "responseProperties": {
+          "properties": [
+            {
+              "name": "responseCode",
+              "value": 200
+            }
+          ]
+        }
+      },
+      "name": "Send Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [760, 160]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify({ success: false, errors: $json.errors }) }}",
+        "responseProperties": {
+          "properties": [
+            {
+              "name": "responseCode",
+              "value": 400
+            }
+          ]
+        }
+      },
+      "name": "Send Response Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [760, 520]
+    },
+    {
+      "parameters": {
+        "path": "health",
+        "responseMode": "onReceived",
+        "options": {},
+        "httpMethod": "GET"
+      },
+      "name": "Health Check Endpoint",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 520],
+      "webhookId": "health"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Vérification de l'état des microservices\n\nconst microserviceUrls = {\n  documentProcessor: 'http://document-processor:8001/health',\n  schemaAnalyzer: 'http://schema-analyzer:8002/health',\n  vectorEngine: 'http://vector-engine:8003/health'\n};\n\n// Fonction pour vérifier l'état d'un microservice\nasync function checkServiceHealth(url) {\n  try {\n    const response = await $http.get(url);\n    return response.status === 200 ? 'operational' : 'degraded';\n  } catch (error) {\n    return 'unavailable';\n  }\n}\n\n// Vérification de l'état de tous les services (en parallèle)\nconst documentProcessorStatus = await checkServiceHealth(microserviceUrls.documentProcessor);\nconst schemaAnalyzerStatus = await checkServiceHealth(microserviceUrls.schemaAnalyzer);\nconst vectorEngineStatus = await checkServiceHealth(microserviceUrls.vectorEngine);\n\n// Déterminer l'état global du système\nconst allOperational = (\n  documentProcessorStatus === 'operational' &&\n  schemaAnalyzerStatus === 'operational' &&\n  vectorEngineStatus === 'operational'\n);\n\nconst anyUnavailable = (\n  documentProcessorStatus === 'unavailable' ||\n  schemaAnalyzerStatus === 'unavailable' ||\n  vectorEngineStatus === 'unavailable'\n);\n\nconst systemStatus = allOperational ? 'operational' : (anyUnavailable ? 'service_outage' : 'degraded');\n\nreturn {\n  json: {\n    status: systemStatus,\n    service: 'TechnicIA Document Ingestion',\n    version: '2.0.0',\n    timestamp: new Date().toISOString(),\n    microservices: {\n      documentProcessor: documentProcessorStatus,\n      schemaAnalyzer: schemaAnalyzerStatus,\n      vectorEngine: vectorEngineStatus\n    }\n  }\n};"
+      },
+      "name": "Check Microservices Health",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [420, 520]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify($json) }}",
+        "responseProperties": {
+          "properties": [
+            {
+              "name": "responseCode",
+              "value": "={{ $json.status === 'operational' ? 200 : ($json.status === 'degraded' ? 503 : 500) }}"
+            }
+          ]
+        }
+      },
+      "name": "Return Health Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [600, 520]
+    },
+    {
+      "parameters": {
+        "path": "document/:documentId/status",
+        "responseMode": "onReceived",
+        "options": {},
+        "httpMethod": "GET"
+      },
+      "name": "Document Status Endpoint",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 700],
+      "webhookId": "document-status"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'http://vector-engine:8003/api/document/' + $parameter.documentId + '/status' }}",
+        "method": "GET",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "name": "Get Document Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [420, 700]
+    },
+    {
+      "parameters": {
+        "content": "={{ JSON.stringify($json.body || {error: 'Unable to retrieve document status'}) }}",
+        "responseProperties": {
+          "properties": [
+            {
+              "name": "responseCode",
+              "value": "={{ $json.statusCode || 200 }}"
+            }
+          ]
+        }
+      },
+      "name": "Return Document Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [600, 700]
+    }
+  ],
+  "connections": {
+    "Document Upload Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate and Configure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate and Configure": {
+      "main": [
+        [
+          {
+            "node": "Document Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Valid?": {
+      "main": [
+        [
+          {
+            "node": "Rename Binary Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Response Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rename Binary Data": {
+      "main": [
+        [
+          {
+            "node": "Ensure Directory Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure Directory Exists": {
+      "main": [
+        [
+          {
+            "node": "Write Binary File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Binary File": {
+      "main": [
+        [
+          {
+            "node": "Document Processor Service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Processor Service": {
+      "main": [
+        [
+          {
+            "node": "Process Document Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Document Results": {
+      "main": [
+        [
+          {
+            "node": "Schema Analyzer Service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schema Analyzer Service": {
+      "main": [
+        [
+          {
+            "node": "Process Schema Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Schema Results": {
+      "main": [
+        [
+          {
+            "node": "Vector Engine Service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vector Engine Service": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Final Response": {
+      "main": [
+        [
+          {
+            "node": "Notify Frontend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Check Endpoint": {
+      "main": [
+        [
+          {
+            "node": "Check Microservices Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Microservices Health": {
+      "main": [
+        [
+          {
+            "node": "Return Health Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Status Endpoint": {
+      "main": [
+        [
+          {
+            "node": "Get Document Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Document Status": {
+      "main": [
+        [
+          {
+            "node": "Return Document Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
