@@ -1,151 +1,219 @@
-# TechnicIA - MVP
+# TechnicIA - Assistant Intelligent de Maintenance Technique
+
+![TechnicIA Logo](docs/images/logo.png)
 
 TechnicIA est un assistant intelligent de maintenance technique qui aide les techniciens à accéder rapidement à l'information pertinente et à diagnostiquer efficacement les problèmes sur les équipements industriels.
 
-## Architecture Globale
+## 🚀 Fonctionnalités du MVP
 
-L'architecture du MVP est basée sur une approche hybride qui combine :
+- **Ingestion intelligente de documentation technique**
+  - Traitement de fichiers PDF (manuels, schémas, etc.)
+  - Extraction précise de texte et d'images via Document AI
+  - Classification automatique des schémas techniques
 
-```
-┌─────────────────┐      ┌───────────────────────┐      ┌────────────────────┐
-│  Interface Web   │◄────►│ Workflows n8n (Orch.) │◄────►│ Microservices Python│
-└────────┬─────────┘      └──────────┬────────────┘      └─────────┬──────────┘
-         │                           │                             │
-         │         ┌─────────────────▼────────────────┐            │
-         └────────►│       Services Google Cloud       │◄───────────┘
-                   │  (Document AI, Vision AI, etc.)   │
-                   └─────────────────┬────────────────┘
-                                     │
-                                     ▼
-                   ┌─────────────────────────────────┐
-                   │          Qdrant (VPS OVH)        │
-                   └─────────────────────────────────┘
-```
+- **Base de connaissances vectorielle**
+  - Vectorisation du contenu textuel et visuel
+  - Recherche sémantique avancée
+  - Organisation structurée des données
 
-## Fonctionnalités Principales
+- **Assistant de diagnostic intelligent**
+  - Compréhension des descriptions de pannes en langage naturel
+  - Méthodologie de diagnostic systématique
+  - Recommandations techniques basées sur la documentation
 
-1. **Ingestion intelligente de documentation technique**
-   - Traitement des PDF jusqu'à 150 MB
-   - Extraction et OCR du contenu textuel via Document AI
-   - Classification des schémas techniques via Vision AI
-   
-2. **Base de connaissances vectorielle**
-   - Stockage et indexation dans Qdrant
-   - Recherche sémantique avancée
-   - Métadonnées structurées avec liens texte-schémas
-   
-3. **Assistant de diagnostic intelligent**
-   - Aide au diagnostic avec approche méthodologique
-   - Affichage des schémas techniques pertinents
-   - Suggestions de tests et de vérifications
+- **Interface intuitive**
+  - Upload simple de documents
+  - Interface conversationnelle
+  - Visualisation contextuelle des schémas
 
-## Structure du Repository
+## 📋 Prérequis
 
-```
-technicia-mvp/
-├── README.md                   # Ce fichier
-├── docs/                       # Documentation
-│   ├── architecture.md         # Architecture détaillée
-│   ├── technicia-deployment-guide.md  # Guide complet de déploiement
-│   ├── deployment-tracking.md  # Suivi du déploiement
-│   ├── deployment-issues.md    # Suivi des problèmes
-│   └── workflows.md            # Description des workflows n8n
-├── docker/                     # Configuration Docker
-│   ├── docker-compose.yml      # Configuration pour tous les services
-│   ├── n8n/                    # Configuration n8n
-│   └── qdrant/                 # Configuration Qdrant
-├── services/                   # Microservices
-│   ├── document-processor/     # Service de traitement des documents
-│   ├── vision-classifier/      # Service de classification des schémas
-│   └── vector-store/           # Service d'interface avec Qdrant
-├── scripts/                    # Scripts utilitaires
-│   ├── deploy.sh               # Script de déploiement automatisé
-│   └── monitor.sh              # Script de surveillance
-└── workflows/                  # Workflows n8n (JSON)
-    ├── ingestion.json          # Workflow d'ingestion de documents
-    ├── question.json           # Workflow de traitement des questions
-    └── diagnosis.json          # Workflow de diagnostic guidé
-```
-
-## Plan d'Implémentation
-
-### 1. Préparation de l'Infrastructure VPS OVH
-
-#### Configuration Recommandée
-- VPS avec 8+ Go RAM, 4+ vCPUs et 100+ Go SSD
-- Ubuntu Server 22.04 LTS
 - Docker et Docker Compose
+- Compte Google Cloud avec Document AI et Vision AI configurés
+- Compte VoyageAI pour les embeddings (ou OpenAI comme alternative)
+- 4 Go de RAM minimum pour exécuter les services
 
-#### Ports Requis
-- 22/tcp : SSH
-- 80/tcp & 443/tcp : HTTP/HTTPS
-- 5678/tcp : n8n
-- 6333/tcp : Qdrant API
-- 8001-8003/tcp : Microservices Python
+## ⚙️ Installation
 
-### 2. Microservices Python (FastAPI)
+1. **Cloner le dépôt**
+   ```bash
+   git clone https://github.com/aurelienbran/technicia-mvp.git
+   cd technicia-mvp
+   ```
 
-Trois services principaux :
+2. **Configurer les variables d'environnement**
+   ```bash
+   cp .env.example .env
+   # Modifiez le fichier .env avec vos propres valeurs
+   ```
 
-#### Document Processor Service (Port 8001)
-- Interface avec Google Document AI
-- Traitement asynchrone des PDFs volumineux
-- Extraction optimisée du texte et des images
+3. **Configurer les identifiants Google Cloud**
+   - Téléchargez votre fichier de credentials JSON depuis Google Cloud
+   - Placez-le dans `services/document-processor/google-credentials.json`
+   - Placez une copie dans `services/schema-analyzer/google-credentials.json`
 
-#### Vision Classifier Service (Port 8002)
-- Interface avec Google Vision AI
-- Classification des schémas (électriques, hydrauliques, pneumatiques)
-- OCR spécialisé pour les annotations des schémas
+4. **Démarrer les services**
+   ```bash
+   # Rendre le script exécutable
+   chmod +x scripts/start-technicia.sh
+   
+   # Démarrer les services
+   ./scripts/start-technicia.sh --build
+   ```
 
-#### Vector Store Interface (Port 8003)
-- Interface avec Qdrant
-- Gestion des embeddings via VoyageAI
-- Recherche sémantique optimisée
+## 🔧 Architecture
 
-### 3. Configuration de n8n
+L'architecture de TechnicIA est basée sur des microservices interconnectés:
 
-Trois workflows principaux :
+```
+┌───────────────┐      ┌─────────────────┐
+│  Frontend     │<────>│  n8n            │
+│  (Interface)  │      │  (Orchestration)│
+└───────────────┘      └────────┬────────┘
+                                │
+       ┌──────────────┬─────────┼─────────┬─────────────┐
+       │              │         │         │             │
+┌──────▼─────┐ ┌──────▼─────┐ ┌─▼───────┐ ┌───────────┐ ┌───────────┐
+│ Document   │ │ Schema     │ │ Vector  │ │ Qdrant    │ │ Diagnosis │
+│ Processor  │ │ Analyzer   │ │ Engine  │ │ (Vector DB)│ │ Engine   │
+└────────────┘ └────────────┘ └─────────┘ └───────────┘ └───────────┘
+```
 
-#### Workflow d'Ingestion
-- Upload et validation de PDF
-- Orchestration du traitement avec Document AI et Vision AI
-- Stockage dans Qdrant via le service Vector Store
+- **Document Processor**: Extraction du texte et des images des PDFs
+- **Schema Analyzer**: Classification des schémas techniques
+- **Vector Engine**: Vectorisation et indexation du contenu
+- **Qdrant**: Base de données vectorielle pour la recherche sémantique
+- **n8n**: Orchestration des workflows d'ingestion et de recherche
 
-#### Workflow de Questions
-- Réception et formatage des questions
-- Recherche contextuelle dans Qdrant
-- Génération de réponses avec Claude 3 Sonnet
+## 🖥️ Utilisation
 
-#### Workflow de Diagnostic
-- Processus guidé en plusieurs étapes
-- Analyse des réponses et recommandations
-- Rapport de diagnostic final
+### Interface n8n
 
-### 4. Déploiement
+Après le démarrage, accédez à l'interface n8n:
+- URL: http://localhost:5678
+- Identifiants par défaut: admin / TechnicIA2025!
 
-Le déploiement utilisera Docker et Docker Compose pour l'ensemble des services. Consultez le [Guide Complet de Déploiement](docs/technicia-deployment-guide.md) pour les instructions détaillées.
+### Importer et activer le workflow d'ingestion
 
-## Prérequis
+1. Dans n8n, allez dans "Workflows"
+2. Cliquez sur "Import from File"
+3. Sélectionnez le fichier `workflows/technicia-ingestion-pure-microservices-fixed.json`
+4. Une fois importé, activez le workflow avec le bouton "Active"
 
-- Compte Google Cloud avec Document AI et Vision AI activés
-- Clés API Anthropic (Claude 3 Sonnet)
-- Clés API VoyageAI pour les embeddings
-- VPS OVH avec accès SSH
+### Importer un PDF pour test
 
-## Installation et Configuration
+```bash
+# Utilisez le script d'importation
+./scripts/start-technicia.sh --import chemin/vers/votre/document.pdf
 
-Consultez le [Guide Complet de Déploiement](docs/technicia-deployment-guide.md) pour les instructions d'installation et de configuration.
+# Ou utilisez curl directement
+curl -X POST -F "file=@chemin/vers/votre/document.pdf" http://localhost:5678/webhook/upload
+```
 
-## Monitoring et Maintenance
+### Vérifier l'état du traitement
 
-Le projet inclut des scripts de surveillance pour s'assurer du bon fonctionnement des services. 
-Consultez la section [Monitoring](docs/technicia-deployment-guide.md#monitoring) du guide de déploiement.
+```bash
+# Voir les journaux de tous les services
+./scripts/start-technicia.sh --logs
 
-## Dépannage
+# Ou vérifier un service spécifique
+docker-compose logs -f document-processor
+```
 
-En cas de problème, consultez la section [Dépannage](docs/technicia-deployment-guide.md#dépannage) du guide de déploiement 
-ou référez-vous au fichier [deployment-issues.md](docs/deployment-issues.md) pour les problèmes connus et leurs solutions.
+## 🔍 Workflows disponibles
 
-## Licence
+### technicia-ingestion-pure-microservices-fixed.json
 
-Tous droits réservés.
+Ce workflow gère l'ingestion des documents PDF:
+1. Réception du PDF via webhook
+2. Validation et écriture du fichier
+3. Traitement par Document Processor
+4. Analyse des schémas techniques par Schema Analyzer
+5. Vectorisation et indexation par Vector Engine
+6. Notification de fin de traitement
+
+### question.json
+
+Ce workflow permet de poser des questions sur les documents indexés:
+1. Réception de la question via webhook
+2. Recherche de contexte pertinent dans Qdrant
+3. Génération de réponse avec Claude 3.5 ou GPT-4
+4. Inclusion des schémas pertinents dans la réponse
+
+## 🛠️ Maintenance
+
+### Arrêter les services
+
+```bash
+./scripts/start-technicia.sh --stop
+```
+
+### Nettoyer et redémarrer
+
+```bash
+./scripts/start-technicia.sh --clean
+```
+
+### Vérifier l'état des services
+
+```bash
+./scripts/start-technicia.sh --status
+```
+
+## 🧪 Tests
+
+Pour tester les microservices individuellement:
+
+```bash
+# Tester le Document Processor
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"documentId":"test-123","filePath":"/tmp/technicia-docs/test/doc.pdf"}' \
+  http://localhost:8001/api/process
+
+# Tester le Schema Analyzer
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"documentId":"test-123","images":[{"id":"img1","path":"/path/to/image.png"}],"basePath":"/tmp"}' \
+  http://localhost:8002/api/analyze
+
+# Tester le Vector Engine
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"documentId":"test-123","textBlocks":[{"text":"test content"}]}' \
+  http://localhost:8003/api/process
+```
+
+## 📊 Performances
+
+Le MVP est conçu pour traiter des documents techniques avec les caractéristiques suivantes:
+- Taille de fichier: jusqu'à 150 Mo
+- Types de documents: PDF (manuels techniques, schémas, guides)
+- Temps de traitement moyen: ~1-2 min pour un document de 50 pages
+- Temps de réponse aux requêtes: < 3 secondes
+
+## 🧩 Perspectives d'évolution
+
+- Intégration vocale pour l'interaction mains-libres sur le terrain
+- Application mobile dédiée pour les techniciens
+- Identification automatique de composants par photo
+- Génération de procédures de maintenance préventive
+- Amélioration du moteur de diagnostic par apprentissage actif
+
+## 👨‍💻 Contribution
+
+Les contributions sont les bienvenues! Veuillez:
+1. Fork le projet
+2. Créer une branche pour votre fonctionnalité (`git checkout -b feature/amazing-feature`)
+3. Commit vos changements (`git commit -m 'Add some amazing feature'`)
+4. Push vers la branche (`git push origin feature/amazing-feature`)
+5. Ouvrir une Pull Request
+
+## 📄 Licence
+
+Ce projet est sous licence [MIT](LICENSE).
+
+## 🙏 Remerciements
+
+- Google Cloud pour Document AI et Vision AI
+- VoyageAI pour les embeddings multimodaux
+- Qdrant pour la recherche vectorielle performante
+- n8n pour l'orchestration des workflows
+- Anthropic/OpenAI pour les modèles d'IA de dialogue
