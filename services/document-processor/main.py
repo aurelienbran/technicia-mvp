@@ -2,7 +2,7 @@
 Service de traitement des documents PDF pour TechnicIA.
 Utilise Google Document AI pour l'extraction de texte et la structuration du contenu.
 """
-from fastapi import FastAPI, File, UploadFile, BackgroundTasks, HTTPException, Form, Request
+from fastapi import FastAPI, File, UploadFile, BackgroundTasks, HTTPException, Form, Request, Body
 from fastapi.responses import JSONResponse
 from google.cloud import documentai_v1 as documentai
 import asyncio
@@ -13,6 +13,7 @@ import time
 import uuid
 from typing import Dict, Any, List, Optional
 from pathlib import Path
+from pydantic import BaseModel, Field
 
 # Configuration du logging
 logging.basicConfig(
@@ -40,6 +41,16 @@ TEMP_DIR.mkdir(exist_ok=True, parents=True)
 # Suivi des tâches en cours
 processing_tasks = {}
 
+# Modèles de données
+class ProcessByPathRequest(BaseModel):
+    documentId: str = Field(..., description="Identifiant unique du document")
+    filePath: str = Field(..., description="Chemin vers le fichier PDF à traiter")
+    fileName: Optional[str] = Field(None, description="Nom du fichier (optionnel)")
+    mimeType: str = Field("application/pdf", description="Type MIME du document")
+    outputPath: Optional[str] = Field(None, description="Répertoire de sortie pour les résultats")
+    extractImages: bool = Field(True, description="Extraire les images du document")
+    extractText: bool = Field(True, description="Extraire le texte du document")
+
 @app.get("/health")
 async def health_check():
     """Vérification de l'état du service."""
@@ -59,6 +70,145 @@ async def health_check():
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": str(e)}
+        )
+
+@app.post("/api/process")
+async def process_by_path(request: ProcessByPathRequest):
+    """
+    Traite un document PDF à partir de son chemin sur le système de fichiers.
+    
+    Args:
+        request: Informations sur le document à traiter
+        
+    Returns:
+        Les données extraites du document
+    """
+    try:
+        logger.info(f"Traitement du document par chemin: {request.filePath} (ID: {request.documentId})")
+        
+        # Validation du chemin de fichier
+        file_path = Path(request.filePath)
+        if not file_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Fichier non trouvé: {request.filePath}"
+            )
+        
+        if not file_path.is_file():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Le chemin spécifié n'est pas un fichier: {request.filePath}"
+            )
+        
+        # Validation du type de fichier
+        if not file_path.name.lower().endswith('.pdf'):
+            raise HTTPException(
+                status_code=400,
+                detail="Type de fichier non supporté. Seuls les fichiers PDF sont acceptés."
+            )
+        
+        # Initialiser le client Document AI
+        client = documentai.DocumentProcessorServiceClient()
+        name = f"projects/{DOCUMENT_AI_PROJECT}/locations/{DOCUMENT_AI_LOCATION}/processors/{DOCUMENT_AI_PROCESSOR_ID}"
+        
+        # Lire le fichier PDF
+        with open(file_path, "rb") as f:
+            content = f.read()
+        
+        # Préparation du nom de fichier
+        file_name = request.fileName or file_path.name
+        
+        # Préparation du répertoire de sortie
+        output_path = request.outputPath or str(TEMP_DIR / request.documentId)
+        os.makedirs(output_path, exist_ok=True)
+        
+        # Préparer et envoyer la requête à Document AI
+        document = documentai.RawDocument(content=content, mime_type=request.mimeType)
+        request_doc_ai = documentai.ProcessRequest(name=name, raw_document=document)
+        
+        # Traiter le document
+        result = client.process_document(request=request_doc_ai)
+        document = result.document
+        
+        # Extraire et structurer le texte si demandé
+        text_blocks = []
+        if request.extractText:
+            text = document.text
+            
+            # Extraction du texte par page
+            for page in document.pages:
+                page_blocks = []
+                for paragraph in page.paragraphs:
+                    para_text = get_text_from_layout(paragraph.layout, text)
+                    # Ne pas ajouter de paragraphes vides
+                    if para_text.strip():
+                        page_blocks.append({
+                            "text": para_text,
+                            "confidence": paragraph.layout.confidence,
+                            "page": page.page_number
+                        })
+                
+                text_blocks.extend(page_blocks)
+        
+        # Extraire les images si demandé
+        images = []
+        if request.extractImages:
+            image_output_dir = Path(output_path) / "images"
+            image_output_dir.mkdir(exist_ok=True)
+            
+            for page_idx, page in enumerate(document.pages):
+                page_number = page.page_number
+                
+                # Si la page a une image détectée, l'enregistrer
+                # Note: Dans un vrai traitement, nous utiliserions les données réelles d'image
+                # Pour ce MVP, nous simulons la détection d'images
+                
+                # Simulation: 1-2 images par page
+                for img_idx in range(min(2, page_idx % 3 + 1)):
+                    image_id = f"img-{request.documentId}-p{page_number}-{img_idx}"
+                    image_path = image_output_dir / f"{image_id}.png"
+                    
+                    # Création d'une image factice (en production, extraite réellement du PDF)
+                    # Ici nous créons juste un fichier vide pour simuler
+                    with open(image_path, "w") as f:
+                        f.write("")
+                    
+                    images.append({
+                        "id": image_id,
+                        "path": str(image_path),
+                        "page": page_number,
+                        "width": page.dimension.width if hasattr(page, "dimension") and hasattr(page.dimension, "width") else 0,
+                        "height": page.dimension.height if hasattr(page, "dimension") and hasattr(page.dimension, "height") else 0
+                    })
+        
+        # Structurer le résultat
+        structured_result = {
+            "success": True,
+            "documentId": request.documentId,
+            "fileName": file_name,
+            "pageCount": len(document.pages),
+            "textBlocks": text_blocks,
+            "images": images,
+            "processingDetails": {
+                "processingTime": time.time(),
+                "documentAiModel": "default",
+                "mimeType": document.mime_type
+            },
+            "metadata": {
+                "originalPath": str(file_path),
+                "outputPath": output_path
+            }
+        }
+        
+        return structured_result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur lors du traitement du document: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors du traitement du document: {str(e)}"
         )
 
 @app.post("/process")
@@ -93,74 +243,17 @@ async def process_document(file: UploadFile = File(...)):
             content = await file.read()
             temp_file.write(content)
         
-        # Initialiser le client Document AI
-        client = documentai.DocumentProcessorServiceClient()
-        name = f"projects/{DOCUMENT_AI_PROJECT}/locations/{DOCUMENT_AI_LOCATION}/processors/{DOCUMENT_AI_PROCESSOR_ID}"
+        # Utiliser la nouvelle route de traitement par chemin
+        request = ProcessByPathRequest(
+            documentId=document_id,
+            filePath=str(temp_file_path),
+            fileName=file.filename,
+            mimeType="application/pdf",
+            extractImages=True,
+            extractText=True
+        )
         
-        # Lire le fichier PDF
-        with open(temp_file_path, "rb") as f:
-            content = f.read()
-        
-        # Préparer et envoyer la requête à Document AI
-        document = documentai.RawDocument(content=content, mime_type="application/pdf")
-        request = documentai.ProcessRequest(name=name, raw_document=document)
-        
-        # Traiter le document
-        result = client.process_document(request=request)
-        document = result.document
-        
-        # Extraire et structurer le texte
-        text = document.text
-        
-        # Extraire les pages et paragraphes
-        pages = []
-        for page in document.pages:
-            paragraphs = []
-            for paragraph in page.paragraphs:
-                para_text = get_text_from_layout(paragraph.layout, text)
-                paragraphs.append({
-                    "text": para_text,
-                    "confidence": paragraph.layout.confidence
-                })
-            
-            # Extraire les images de la page (simulation)
-            images = []
-            for image in page.image_detection_params:
-                image_path = f"{TEMP_DIR}/{document_id}_page{page.page_number}_image{len(images)}.png"
-                images.append({
-                    "id": f"img-{uuid.uuid4()}",
-                    "path": image_path,
-                    "page_number": page.page_number
-                })
-            
-            pages.append({
-                "page_number": page.page_number,
-                "paragraphs": paragraphs,
-                "width": page.dimension.width,
-                "height": page.dimension.height,
-                "images": images
-            })
-        
-        # Extraire les entités
-        entities = []
-        for entity in document.entities:
-            entities.append({
-                "type": entity.type,
-                "mention_text": entity.mention_text,
-                "confidence": entity.confidence
-            })
-        
-        # Structurer le résultat
-        structured_result = {
-            "document_id": document_id,
-            "document_text": text,
-            "pages": pages,
-            "entities": entities,
-            "mime_type": document.mime_type,
-            "page_count": len(document.pages),
-            "images": [], # À remplacer par des images réelles extraites du document
-            "filename": file.filename
-        }
+        result = await process_by_path(request)
         
         # Nettoyer le fichier temporaire
         try:
@@ -168,7 +261,7 @@ async def process_document(file: UploadFile = File(...)):
         except Exception as e:
             logger.warning(f"Erreur lors du nettoyage du fichier {temp_file_path}: {str(e)}")
         
-        return structured_result
+        return result
         
     except HTTPException:
         raise
@@ -210,79 +303,7 @@ async def process_file(request: Request):
             detail=f"Erreur lors du traitement du fichier: {str(e)}"
         )
 
-@app.post("/process-large-file")
-async def process_large_file(
-    file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = None
-):
-    """
-    Traite un fichier PDF volumineux de manière asynchrone.
-    
-    Args:
-        file: Le fichier PDF à traiter
-        background_tasks: Tâches d'arrière-plan
-        
-    Returns:
-        Un identifiant de tâche pour suivre le traitement
-    """
-    try:
-        # Validation du type de fichier
-        if not file.filename.lower().endswith('.pdf'):
-            raise HTTPException(
-                status_code=400,
-                detail="Type de fichier non supporté. Seuls les fichiers PDF sont acceptés."
-            )
-        
-        # Générer un ID de tâche unique
-        task_id = str(uuid.uuid4())
-        
-        # Sauvegarder le fichier temporairement
-        temp_file_path = TEMP_DIR / f"{task_id}_{file.filename}"
-        
-        with open(temp_file_path, "wb") as temp_file:
-            content = await file.read()
-            temp_file.write(content)
-        
-        # Initialiser l'état de la tâche
-        processing_tasks[task_id] = {
-            "status": "pending",
-            "filename": file.filename,
-            "file_path": str(temp_file_path),
-            "start_time": time.time(),
-            "progress": 0,
-            "result": None,
-            "error": None
-        }
-        
-        # Lancer le traitement en arrière-plan
-        if background_tasks:
-            background_tasks.add_task(
-                process_with_document_ai,
-                task_id,
-                str(temp_file_path)
-            )
-        else:
-            # Pour les tests ou le débogage, démarrage immédiat
-            asyncio.create_task(
-                process_with_document_ai(task_id, str(temp_file_path))
-            )
-        
-        return {
-            "task_id": task_id,
-            "status": "processing",
-            "message": f"Traitement du fichier {file.filename} en cours"
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erreur lors du traitement du fichier: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erreur lors du traitement du fichier: {str(e)}"
-        )
-
-@app.get("/task/{task_id}")
+@app.post("/task/{task_id}")
 async def get_task_status(task_id: str):
     """
     Récupère l'état d'une tâche de traitement.
@@ -331,168 +352,6 @@ async def get_task_status(task_id: str):
         "processing_time": time.time() - task_info["start_time"]
     }
 
-@app.post("/debug-upload")
-async def debug_upload(request: Request):
-    """
-    Endpoint de débogage pour tester l'upload de fichiers.
-    Affiche tous les détails sur la requête reçue pour faciliter le débogage.
-    """
-    try:
-        # Extraire les headers
-        headers = dict(request.headers.items())
-        
-        # Essayer de parser le formulaire
-        form_data = {}
-        try:
-            form = await request.form()
-            for key in form:
-                if hasattr(form[key], "filename"):  # C'est un fichier
-                    form_data[key] = {
-                        "filename": form[key].filename,
-                        "content_type": form[key].content_type,
-                        "size": len(await form[key].read())
-                    }
-                else:  # C'est une valeur standard
-                    form_data[key] = form[key]
-        except Exception as form_error:
-            form_data = {"error": str(form_error)}
-        
-        # Essayer de lire le body brut
-        body = None
-        try:
-            body = await request.body()
-            body = f"Taille du corps: {len(body)} octets"
-        except Exception as body_error:
-            body = {"error": str(body_error)}
-        
-        # Produire un rapport de débogage
-        debug_info = {
-            "request_method": request.method,
-            "url": str(request.url),
-            "headers": headers,
-            "form_data": form_data,
-            "body": body,
-            "client": request.client.host if request.client else None
-        }
-        
-        return debug_info
-        
-    except Exception as e:
-        logger.error(f"Erreur lors du débogage de l'upload: {str(e)}")
-        return {
-            "status": "error",
-            "message": str(e)
-        }
-
-async def process_with_document_ai(task_id: str, file_path: str):
-    """
-    Traite un document avec Document AI.
-    
-    Args:
-        task_id: L'identifiant de la tâche
-        file_path: Le chemin vers le fichier PDF
-    """
-    try:
-        # Mettre à jour l'état
-        processing_tasks[task_id]["status"] = "processing"
-        processing_tasks[task_id]["progress"] = 10
-        
-        # Initialiser le client Document AI
-        client = documentai.DocumentProcessorServiceClient()
-        name = f"projects/{DOCUMENT_AI_PROJECT}/locations/{DOCUMENT_AI_LOCATION}/processors/{DOCUMENT_AI_PROCESSOR_ID}"
-        
-        # Lire le fichier PDF
-        with open(file_path, "rb") as f:
-            content = f.read()
-        
-        # Mettre à jour l'état
-        processing_tasks[task_id]["progress"] = 30
-        
-        # Préparer et envoyer la requête à Document AI
-        document = documentai.RawDocument(content=content, mime_type="application/pdf")
-        request = documentai.ProcessRequest(name=name, raw_document=document)
-        
-        # Traiter le document
-        result = client.process_document(request=request)
-        document = result.document
-        
-        # Mettre à jour l'état
-        processing_tasks[task_id]["progress"] = 70
-        
-        # Extraire et structurer le texte
-        text = document.text
-        
-        # Extraire les pages et paragraphes
-        pages = []
-        for page in document.pages:
-            paragraphs = []
-            for paragraph in page.paragraphs:
-                para_text = get_text_from_layout(paragraph.layout, text)
-                paragraphs.append({
-                    "text": para_text,
-                    "confidence": paragraph.layout.confidence
-                })
-            
-            # Extraire les images de la page (simulation)
-            images = []
-            for i in range(2):  # Simulation de 2 images par page
-                image_path = f"{TEMP_DIR}/{task_id}_page{page.page_number}_image{i}.png"
-                images.append({
-                    "id": f"img-{uuid.uuid4()}",
-                    "path": image_path,
-                    "page_number": page.page_number
-                })
-            
-            pages.append({
-                "page_number": page.page_number,
-                "paragraphs": paragraphs,
-                "width": page.dimension.width,
-                "height": page.dimension.height,
-                "images": images
-            })
-        
-        # Extraire les entités
-        entities = []
-        for entity in document.entities:
-            entities.append({
-                "type": entity.type,
-                "mention_text": entity.mention_text,
-                "confidence": entity.confidence
-            })
-        
-        # Structurer le résultat
-        structured_result = {
-            "document_text": text,
-            "pages": pages,
-            "entities": entities,
-            "mime_type": document.mime_type,
-            "page_count": len(document.pages),
-            "images": [], # À remplacer par les images réelles extraites du document
-            "processing_time": time.time() - processing_tasks[task_id]["start_time"]
-        }
-        
-        # Mettre à jour l'état avec le résultat
-        processing_tasks[task_id]["status"] = "completed"
-        processing_tasks[task_id]["progress"] = 100
-        processing_tasks[task_id]["result"] = structured_result
-        
-        # Nettoyer le fichier temporaire
-        try:
-            os.unlink(file_path)
-        except Exception as e:
-            logger.warning(f"Erreur lors du nettoyage du fichier {file_path}: {str(e)}")
-        
-    except Exception as e:
-        logger.error(f"Erreur lors du traitement avec Document AI: {str(e)}")
-        processing_tasks[task_id]["status"] = "error"
-        processing_tasks[task_id]["error"] = str(e)
-        
-        # Nettoyer le fichier temporaire en cas d'erreur
-        try:
-            os.unlink(file_path)
-        except Exception as cleanup_error:
-            logger.warning(f"Erreur lors du nettoyage du fichier {file_path}: {str(cleanup_error)}")
-
 def get_text_from_layout(layout, text):
     """
     Extrait le texte à partir d'un layout Document AI.
@@ -513,4 +372,4 @@ def get_text_from_layout(layout, text):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)
