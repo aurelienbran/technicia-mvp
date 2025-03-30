@@ -1,5 +1,5 @@
 {
-  "name": "TechnicIA - Workflow d'Ingestion 100% Microservices (Fixed)",
+  "name": "TechnicIA - Workflow d'Ingestion Microservices (Corrigé)",
   "nodes": [
     {
       "parameters": {
@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Récupération des informations du fichier uploadé et validation basique\nconst documentId = 'doc-' + Date.now();\nlet errors = [];\nlet binaryData = null;\nlet fileName = 'document.pdf';\nlet fileSize = 0;\nlet binaryProperty = null;\n\n// Vérifier si nous avons reçu un fichier\nif ($input.item && $input.item.binary) {\n  const keys = Object.keys($input.item.binary);\n  if (keys.length > 0) {\n    binaryProperty = keys[0]; // Sauvegarde de la clé binaire\n    const fileData = $input.item.binary[keys[0]];\n    if (fileData) {\n      binaryData = fileData;\n      fileName = fileData.fileName || 'document.pdf';\n      fileSize = fileData.fileSize || 0;\n      \n      // Assurons-nous que le nom de fichier a l'extension .pdf\n      if (!fileName.toLowerCase().endsWith('.pdf')) {\n        fileName += '.pdf';\n      }\n      \n      // Vérification de la taille maximale (200 Mo)\n      const MAX_SIZE = 200 * 1024 * 1024;\n      if (fileSize > MAX_SIZE) {\n        errors.push(`Le fichier est trop volumineux (${Math.round(fileSize / (1024 * 1024))} Mo). Maximum autorisé: 200 Mo`);\n      }\n    } else {\n      errors.push('Données de fichier invalides');\n    }\n  } else {\n    errors.push('Aucune donnée binaire trouvée');\n  }\n} else {\n  errors.push('Aucun fichier n\\'a été téléchargé');\n}\n\n// Informations de base pour le débogage\nconsole.log('Détails du fichier:', { \n  fileName, \n  fileSize: fileSize ? (fileSize / (1024 * 1024)).toFixed(2) + ' MB' : 'N/A' \n});\n\n// Configuration globale\nconst config = {\n  storageFolder: '/tmp/technicia-docs/',\n  documentProcessorUrl: 'http://document-processor:8001/api/process',\n  schemaAnalyzerUrl: 'http://schema-analyzer:8002/api/analyze',\n  vectorEngineUrl: 'http://vector-engine:8003/api/vectorize',\n  diagnosisEngineUrl: 'http://diagnosis-engine:8004/api/diagnose',\n  environment: 'production',\n  version: '1.0.0'\n};\n\n// Créer le chemin complet du fichier\nconst basePath = config.storageFolder + documentId + '/';\nconst fullPath = basePath + fileName;\n\n// Résultat validé\nreturn {\n  json: {\n    documentId,\n    fileName,\n    fileSize,\n    mimeType: 'application/pdf', // On force le type MIME à PDF\n    errors,\n    isValid: errors.length === 0,\n    timestamp: new Date().toISOString(),\n    // Données binaires\n    binaryProperty, // La variable est maintenant définie en dehors des conditions\n    // Chemins\n    basePath,\n    fullPath,\n    storageFolder: config.storageFolder,\n    // URLs microservices\n    documentProcessorUrl: config.documentProcessorUrl,\n    schemaAnalyzerUrl: config.schemaAnalyzerUrl,\n    vectorEngineUrl: config.vectorEngineUrl\n  }\n};"
+        "jsCode": "// Récupération des informations du fichier uploadé et validation basique\nconst documentId = 'doc-' + Date.now();\nlet errors = [];\nlet binaryData = null;\nlet fileName = 'document.pdf';\nlet fileSize = 0;\nlet binaryProperty = null;\n\n// Vérifier si nous avons reçu un fichier\nif ($input.item && $input.item.binary) {\n  const keys = Object.keys($input.item.binary);\n  if (keys.length > 0) {\n    binaryProperty = keys[0]; // Sauvegarde de la clé binaire\n    const fileData = $input.item.binary[keys[0]];\n    if (fileData) {\n      binaryData = fileData;\n      fileName = fileData.fileName || 'document.pdf';\n      fileSize = fileData.fileSize || 0;\n      \n      // Assurons-nous que le nom de fichier a l'extension .pdf\n      if (!fileName.toLowerCase().endsWith('.pdf')) {\n        fileName += '.pdf';\n      }\n      \n      // Vérification de la taille maximale (200 Mo)\n      const MAX_SIZE = 200 * 1024 * 1024;\n      if (fileSize > MAX_SIZE) {\n        errors.push(`Le fichier est trop volumineux (${Math.round(fileSize / (1024 * 1024))} Mo). Maximum autorisé: 200 Mo`);\n      }\n    } else {\n      errors.push('Données de fichier invalides');\n    }\n  } else {\n    errors.push('Aucune donnée binaire trouvée');\n  }\n} else {\n  errors.push('Aucun fichier n\\'a été téléchargé');\n}\n\n// Informations de base pour le débogage\nconsole.log('Détails du fichier:', { \n  fileName, \n  fileSize: fileSize ? (fileSize / (1024 * 1024)).toFixed(2) + ' MB' : 'N/A' \n});\n\n// Configuration globale\nconst config = {\n  storageFolder: '/tmp/technicia-docs/',\n  documentProcessorUrl: 'http://document-processor:8001/api/process',\n  schemaAnalyzerUrl: 'http://schema-analyzer:8002/api/analyze',\n  vectorEngineUrl: 'http://vector-engine:8003/api/process',\n  environment: 'production',\n  version: '1.0.0'\n};\n\n// Créer le chemin complet du fichier\nconst basePath = config.storageFolder + documentId + '/';\nconst fullPath = basePath + fileName;\n\n// Importer les données binaires directement\nconst inputData = $input.item;\n\n// Résultat validé\nreturn {\n  json: {\n    documentId,\n    fileName,\n    fileSize,\n    mimeType: 'application/pdf', // On force le type MIME à PDF\n    errors,\n    isValid: errors.length === 0,\n    timestamp: new Date().toISOString(),\n    // Données binaires\n    binaryProperty, // La variable est maintenant définie en dehors des conditions\n    // Chemins\n    basePath,\n    fullPath,\n    storageFolder: config.storageFolder,\n    // URLs microservices\n    documentProcessorUrl: config.documentProcessorUrl,\n    schemaAnalyzerUrl: config.schemaAnalyzerUrl,\n    vectorEngineUrl: config.vectorEngineUrl\n  },\n  // Passer les données binaires telles quelles\n  binary: inputData.binary\n};"
       },
       "name": "Validate and Configure",
       "type": "n8n-nodes-base.code",
@@ -44,13 +44,10 @@
     },
     {
       "parameters": {
-        "fileName": "={{ $json.fullPath }}",
-        "options": {
-          "createDirectory": true
-        }
+        "jsCode": "// Écriture manuelle du fichier sur le disque via fs\nconst fs = $node.fs;\nconst path = $node.path;\n\n// Récupération des données nécessaires\nconst { basePath, fullPath, binaryProperty } = $input.item.json;\n\ntry {\n  // Créer le dossier s'il n'existe pas (récursif)\n  fs.mkdirSync(path.dirname(fullPath), { recursive: true });\n  \n  // Récupérer les données binaires depuis l'entrée\n  if (!binaryProperty || !$input.item.binary || !$input.item.binary[binaryProperty]) {\n    throw new Error('Données binaires manquantes ou invalides');\n  }\n  \n  const binaryData = $input.item.binary[binaryProperty];\n  \n  // Écrire le fichier\n  const buffer = Buffer.from(binaryData.data, 'base64');\n  fs.writeFileSync(fullPath, buffer);\n  \n  console.log(`Fichier écrit avec succès: ${fullPath}`);\n} catch (error) {\n  console.error(`Erreur lors de l'écriture du fichier:`, error);\n  throw new Error(`Erreur d'écriture du fichier: ${error.message}`);\n}\n\n// Passer les données au nœud suivant\nreturn $input.item;"
       },
-      "name": "Write Binary File",
-      "type": "n8n-nodes-base.writeBinaryFile",
+      "name": "Write File",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [760, 300]
     },
@@ -60,37 +57,9 @@
         "method": "POST",
         "bodyContentType": "json",
         "bodyParameters": {
-          "parameters": [
-            {
-              "name": "documentId",
-              "value": "={{ $json.documentId }}"
-            },
-            {
-              "name": "filePath",
-              "value": "={{ $json.fullPath }}"
-            },
-            {
-              "name": "fileName",
-              "value": "={{ $json.fileName }}"
-            },
-            {
-              "name": "mimeType",
-              "value": "={{ $json.mimeType }}"
-            },
-            {
-              "name": "outputPath",
-              "value": "={{ $json.basePath }}"
-            },
-            {
-              "name": "extractImages",
-              "value": true
-            },
-            {
-              "name": "extractText",
-              "value": true
-            }
-          ]
+          "parameters": []
         },
+        "bodyParametersJson": "={{ { \"documentId\": $json.documentId, \"filePath\": $json.fullPath, \"fileName\": $json.fileName, \"mimeType\": $json.mimeType, \"outputPath\": $json.basePath, \"extractImages\": true, \"extractText\": true } }}",
         "options": {
           "allowUnauthorizedCerts": true,
           "response": {
@@ -139,7 +108,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Traitement des résultats de Schema Analyzer\nconst analyzerResults = $json.body || {};\n\n// Vérifier si le Schema Analyzer a bien fonctionné\nif (!analyzerResults.success) {\n  throw new Error(`Schema Analyzer failed: ${analyzerResults.message || 'Unknown error'}`);\n}\n\n// Récupérer les données du document\nconst documentInfo = $input.item.json;\n\n// Extraire les informations nécessaires\nconst documentId = documentInfo.documentId;\nconst textBlocks = documentInfo.textBlocks;\nconst pageCount = documentInfo.pageCount;\nconst metadata = documentInfo.metadata;\nconst processedImages = analyzerResults.images || [];\n\n// Statistiques sur les images\nconst stats = {\n  totalImages: processedImages.length,\n  technicalDiagrams: processedImages.filter(img => img.classification === 'technical_diagram').length,\n  decorativeImages: processedImages.filter(img => img.classification !== 'technical_diagram').length,\n  imagesWithText: processedImages.filter(img => img.ocrText && img.ocrText.length > 0).length\n};\n\n// Préparation des données pour Vector Engine\nreturn {\n  json: {\n    documentId,\n    vectorEngineUrl: documentInfo.vectorEngineUrl,\n    textBlocks,\n    images: processedImages,\n    metadata: {\n      ...metadata,\n      pageCount,\n      imageStats: stats\n    },\n    fileName: documentInfo.fileName,\n    timestamp: new Date().toISOString()\n  }\n};"
+        "jsCode": "// Traitement des résultats de Schema Analyzer\nconst analyzerResults = $json.body || {};\n\n// Vérifier si le Schema Analyzer a bien fonctionné\nif (!analyzerResults.success) {\n  throw new Error(`Schema Analyzer failed: ${analyzerResults.message || 'Unknown error'}`);\n}\n\n// Récupérer les données du document\nconst documentInfo = $input.item.json;\n\n// Extraire les informations nécessaires\nconst documentId = documentInfo.documentId;\nconst textBlocks = documentInfo.textBlocks;\nconst pageCount = documentInfo.pageCount;\nconst metadata = documentInfo.metadata;\nconst processedImages = analyzerResults.images || [];\n\n// Statistiques sur les images\nconst stats = analyzerResults.stats || {\n  totalImages: processedImages.length,\n  technicalDiagrams: processedImages.filter(img => img.classification === 'technical_diagram').length,\n  processedImages: processedImages.length\n};\n\n// Préparation des données pour Vector Engine\nreturn {\n  json: {\n    documentId,\n    vectorEngineUrl: documentInfo.vectorEngineUrl,\n    textBlocks,\n    images: processedImages,\n    metadata: {\n      ...metadata,\n      pageCount,\n      imageStats: stats\n    },\n    fileName: documentInfo.fileName,\n    timestamp: new Date().toISOString()\n  }\n};"
       },
       "name": "Process Schema Results",
       "type": "n8n-nodes-base.code",
@@ -148,7 +117,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.vectorEngineUrl }}/process",
+        "url": "={{ $json.vectorEngineUrl }}",
         "method": "POST",
         "bodyContentType": "json",
         "bodyParameters": {
@@ -365,7 +334,7 @@
       "main": [
         [
           {
-            "node": "Write Binary File",
+            "node": "Write File",
             "type": "main",
             "index": 0
           },
@@ -384,7 +353,7 @@
         ]
       ]
     },
-    "Write Binary File": {
+    "Write File": {
       "main": [
         [
           {
