@@ -35,6 +35,7 @@ TechnicIA est un assistant intelligent de maintenance technique qui aide les tec
 - Docker et Docker Compose v2.x ou supérieur
 - Compte Google Cloud avec Document AI et Vision AI configurés
 - Compte VoyageAI pour les embeddings (ou OpenAI comme alternative)
+- Compte Anthropic pour utiliser Claude 3.5 Sonnet
 - 4 Go de RAM minimum pour exécuter les services
 - 10 Go d'espace disque disponible
 
@@ -66,6 +67,10 @@ DOCUMENT_AI_PROCESSOR_ID=votre-processor-id
 VOYAGE_API_KEY=votre-clé-voyage-ai
 # OU
 OPENAI_API_KEY=votre-clé-openai
+
+# Anthropic API pour Claude
+ANTHROPIC_API_KEY=votre-clé-anthropic
+ANTHROPIC_MODEL=claude-3-5-sonnet-20240620
 
 # n8n (ne pas modifier)
 N8N_USER=admin
@@ -125,12 +130,29 @@ Après le démarrage, accédez à l'interface n8n:
 - URL: http://localhost:5678
 - Identifiants par défaut: admin / TechnicIA2025!
 
-### Importer et activer le workflow d'ingestion
+### Configuration des credentials pour Claude dans n8n
+
+1. Après vous être connecté à l'interface n8n, cliquez sur **Settings** (⚙️) dans le menu latéral
+2. Sélectionnez **Credentials** dans le menu déroulant
+3. Cliquez sur le bouton **+ Add Credential**
+4. Choisissez le type **HTTP Header Auth** 
+5. Complétez les champs suivants:
+   - **Name**: Claude API Authentication
+   - **Name**: x-api-key 
+   - **Value**: Votre clé API Anthropic (la même que dans votre fichier .env)
+6. Cliquez sur **Save**
+
+Ce credential sera automatiquement utilisé par les workflows de question et de diagnostic pour communiquer avec l'API Claude.
+
+### Importer et activer les workflows
 
 1. Dans n8n, allez dans "Workflows"
 2. Cliquez sur "Import from File"
-3. Sélectionnez le fichier `workflows/technicia-ingestion-pure-microservices-fixed.json`
-4. Une fois importé, activez le workflow avec le bouton "Active"
+3. Importez les fichiers dans l'ordre suivant:
+   - `workflows/technicia-ingestion-pure-microservices-fixed.json`
+   - `workflows/question.json`
+   - `workflows/diagnosis.json`
+4. Pour chaque workflow importé, activez-le avec le bouton "Active"
 
 ### Importer un PDF pour test
 
@@ -171,6 +193,15 @@ Ce workflow permet de poser des questions sur les documents indexés:
 2. Recherche de contexte pertinent dans Qdrant
 3. Génération de réponse avec Claude 3.5 ou GPT-4
 4. Inclusion des schémas pertinents dans la réponse
+
+### Workflow de diagnostic guidé
+
+Ce workflow permet un diagnostic pas à pas:
+1. Démarrage avec symptômes initiaux via webhook
+2. Génération d'un plan de diagnostic structuré
+3. Présentation séquentielle des étapes de diagnostic
+4. Collecte des résultats des tests à chaque étape
+5. Génération d'un rapport final de diagnostic
 
 ## 🛠️ Maintenance
 
