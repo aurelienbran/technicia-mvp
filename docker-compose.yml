@@ -89,6 +89,45 @@ services:
       timeout: 5s
       retries: 5
 
+  # Service de recherche vectorielle
+  vector-store:
+    build:
+      context: ./services/vector-store
+    ports:
+      - "8000:8000"
+    networks:
+      - technicia_network
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - COLLECTION_NAME=technicia
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Service d'interaction avec Claude
+  claude-service:
+    build:
+      context: ./services/claude-service
+    ports:
+      - "8004:8004"
+    networks:
+      - technicia_network
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Orchestrateur n8n
   n8n:
     image: n8nio/n8n:latest
@@ -110,6 +149,10 @@ services:
       schema-analyzer:
         condition: service_healthy
       vector-engine:
+        condition: service_healthy
+      vector-store:
+        condition: service_healthy
+      claude-service:
         condition: service_healthy
 
   # Frontend (pour le MVP)
