@@ -26,14 +26,6 @@ TechnicIA est un assistant intelligent de maintenance technique qui aide les tec
   - Interface conversationnelle
   - Visualisation contextuelle des schémas
 
-## ⚠️ Note sur les modifications apportées
-
-La version actuelle contient des améliorations importantes des microservices pour résoudre un problème d'intégration entre n8n et les services d'ingestion. Les modifications préservent la compatibilité avec les anciennes implémentations tout en ajoutant de nouvelles fonctionnalités.
-
-**Changement principal :** Les services peuvent désormais traiter des fichiers à partir de leur chemin sur un système de fichiers partagé, évitant ainsi les transferts redondants de données volumineuses entre services.
-
-Voir [la documentation détaillée](docs/troubleshooting/workflow-ingestion.md) pour plus d'informations sur cette correction.
-
 ## 📋 Prérequis
 
 - Docker et Docker Compose
@@ -62,11 +54,7 @@ Voir [la documentation détaillée](docs/troubleshooting/workflow-ingestion.md) 
 
 4. **Démarrer les services**
    ```bash
-   # Rendre le script exécutable
-   chmod +x scripts/start-technicia.sh
-   
-   # Démarrer les services
-   ./scripts/start-technicia.sh --build
+   docker-compose up -d
    ```
 
 ## 🔧 Architecture
@@ -88,21 +76,10 @@ L'architecture de TechnicIA est basée sur des microservices interconnectés:
 ```
 
 - **Document Processor**: Extraction du texte et des images des PDFs
-  - API classique: `/process` (attend un fichier binaire)
-  - Nouvelle API: `/api/process` (accepte un chemin de fichier)
-
 - **Schema Analyzer**: Classification des schémas techniques
-  - Basé sur Vision AI pour identifier et classifier les images techniques
-  - API batch: `/api/analyze` pour traiter plusieurs images d'un document
-  - API unitaire: `/api/analyze-image` pour analyser une image spécifique
-
 - **Vector Engine**: Vectorisation et indexation du contenu
-  - Vectorisation des textes et images en embeddings
-  - Stockage dans la base vectorielle Qdrant
-  - API de recherche sémantique
-
-- **n8n**: Orchestration des workflows d'ingestion et de recherche
-  - Workflow principal: `technicia-ingestion-pure-microservices-fixed.json`
+- **Qdrant**: Base de données vectorielle
+- **n8n**: Orchestration des workflows
 
 ## 🖥️ Utilisation
 
@@ -116,32 +93,24 @@ Après le démarrage, accédez à l'interface n8n:
 
 1. Dans n8n, allez dans "Workflows"
 2. Cliquez sur "Import from File"
-3. Sélectionnez le fichier `workflows/technicia-ingestion-pure-microservices-fixed.json`
+3. Sélectionnez le fichier `workflows/technicia-ingestion.json`
 4. Une fois importé, activez le workflow avec le bouton "Active"
 
 ### Importer un PDF pour test
 
 ```bash
-# Utilisez le script d'importation
-./scripts/start-technicia.sh --import chemin/vers/votre/document.pdf
-
-# Ou utilisez curl directement
 curl -X POST -F "file=@chemin/vers/votre/document.pdf" http://localhost:5678/webhook/upload
 ```
 
 ### Vérifier l'état du traitement
 
 ```bash
-# Voir les journaux de tous les services
-./scripts/start-technicia.sh --logs
-
-# Ou vérifier un service spécifique
 docker-compose logs -f document-processor
 ```
 
 ## 🔍 Workflows disponibles
 
-### technicia-ingestion-pure-microservices-fixed.json
+### technicia-ingestion.json
 
 Ce workflow gère l'ingestion des documents PDF:
 1. Réception du PDF via webhook
@@ -164,34 +133,14 @@ Ce workflow permet de poser des questions sur les documents indexés:
 ### Arrêter les services
 
 ```bash
-./scripts/start-technicia.sh --stop
+docker-compose down
 ```
 
 ### Nettoyer et redémarrer
 
 ```bash
-./scripts/start-technicia.sh --clean
-```
-
-### Vérifier l'état des services
-
-```bash
-./scripts/start-technicia.sh --status
-```
-
-## 🧪 Tests
-
-Pour tester les microservices individuellement:
-
-```bash
-# Utiliser le script de test
-./scripts/test-services.sh --all
-
-# Ou tester un service spécifique
-./scripts/test-services.sh --document-processor
-./scripts/test-services.sh --schema-analyzer
-./scripts/test-services.sh --vector-engine
-./scripts/test-services.sh --qdrant
+docker-compose down -v
+docker-compose up -d --build
 ```
 
 ## 📊 Performances
