@@ -1,41 +1,39 @@
 import os
-import json
 import time
-from typing import Dict, List, Optional, Union, Any
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+import json
+import logging
+from typing import List, Dict, Any, Optional
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from cachetools import TTLCache
 import anthropic
 import openai
-from tenacity import retry, stop_after_attempt, wait_exponential
-from cachetools import TTLCache
 
-# Load environment variables
+# Configuration des logs
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger("llm-service")
+
+# Chargement des variables d'environnement
 load_dotenv()
 
-# Configure API keys
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20240620")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+# Initialisation du cache pour les réponses
+# 1000 items, expiration après 1 heure
+response_cache = TTLCache(maxsize=1000, ttl=3600)
 
-# Initialize clients
-anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
-if OPENAI_API_KEY:
-    openai.api_key = OPENAI_API_KEY
-
-# Set up response cache (TTL: 1 hour)
-cache = TTLCache(maxsize=1000, ttl=3600)
-
-# Initialize FastAPI
+# Initialisation de l'application FastAPI
 app = FastAPI(
     title="TechnicIA LLM Service",
-    description="API for generating responses from LLMs for TechnicIA assistant",
+    description="Service de gestion des interactions avec les modèles de langage pour TechnicIA",
     version="1.0.0"
 )
 
-# Enable CORS
+# Activation du CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,221 +42,222 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Define data models
+# Modèles de données
 class Message(BaseModel):
-    role: str
-    content: str
+    role: str = Field(..., example="user")
+    content: str = Field(..., example="Comment fonctionne le circuit hydraulique?")
 
-class ClaudeRequest(BaseModel):
-    system: str
+class GenerateRequest(BaseModel):
+    system: str = Field(..., example="Tu es un assistant technique spécialisé...")
     messages: List[Message]
-    model: str = CLAUDE_MODEL
-    max_tokens: int = 4000
-    temperature: float = 0.2
-    cache_key: Optional[str] = None
+    model: Optional[str] = Field(None, example="claude-3-5-sonnet-20240620")
+    temperature: Optional[float] = Field(0.2, ge=0, le=1)
+    max_tokens: Optional[int] = Field(2000, ge=1, le=4096)
+    provider: Optional[str] = Field("anthropic", example="anthropic")
+    cache: Optional[bool] = Field(True)
 
-class OpenAIRequest(BaseModel):
-    system: str
-    messages: List[Message]
-    model: str = OPENAI_MODEL
-    max_tokens: int = 4000
-    temperature: float = 0.2
-    cache_key: Optional[str] = None
-
-class GenericLLMRequest(BaseModel):
-    system: str
-    messages: List[Dict[str, str]]
-    model: str
-    max_tokens: int = 4000
-    temperature: float = 0.2
-    provider: str = "anthropic"  # "anthropic" or "openai"
-    cache_key: Optional[str] = None
-
-class ResponseModel(BaseModel):
+class GenerateResponse(BaseModel):
     content: str
     model: str
-    provider: str
-    tokens_used: Optional[int] = None
-    processing_time: float
+    usage: Dict[str, Any]
     cached: bool = False
+    provider: str
+    processing_time: float
 
-# Helper function to generate cache key
-def generate_cache_key(request_data):
-    if request_data.cache_key:
-        return request_data.cache_key
-    
-    # Create a deterministic string representation for caching
-    key_data = {
-        "system": request_data.system,
-        "messages": [dict(m) for m in request_data.messages],
-        "model": request_data.model,
-        "temperature": request_data.temperature
-    }
-    return f"{hash(json.dumps(key_data, sort_keys=True))}"
+# Fonction pour initialiser les clients LLM
+def get_anthropic_client():
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY non définie")
+    return anthropic.Anthropic(api_key=api_key)
 
-# Claude API call with retry logic
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-async def call_claude(request_data: ClaudeRequest):
-    start_time = time.time()
-    
-    if not anthropic_client:
-        raise HTTPException(status_code=500, detail="Anthropic API not configured")
-    
-    # Check cache
-    cache_key = generate_cache_key(request_data)
-    if cache_key in cache:
-        cached_response = cache[cache_key]
-        cached_response["processing_time"] = 0.01  # Negligible processing time for cached responses
-        cached_response["cached"] = True
-        return cached_response
-    
-    messages = [{"role": m.role, "content": m.content} for m in request_data.messages]
-    
-    try:
-        response = anthropic_client.messages.create(
-            model=request_data.model,
-            system=request_data.system,
-            messages=messages,
-            max_tokens=request_data.max_tokens,
-            temperature=request_data.temperature
-        )
-        
-        result = {
-            "content": response.content[0].text,
-            "model": request_data.model,
-            "provider": "anthropic",
-            "tokens_used": response.usage.output_tokens + response.usage.input_tokens,
-            "processing_time": time.time() - start_time,
-            "cached": False
-        }
-        
-        # Store in cache
-        cache[cache_key] = result
-        return result
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error calling Claude API: {str(e)}")
+def get_openai_client():
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY non définie")
+    return openai.OpenAI(api_key=api_key)
 
-# OpenAI API call with retry logic
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-async def call_openai(request_data: OpenAIRequest):
-    start_time = time.time()
-    
-    if not OPENAI_API_KEY:
-        raise HTTPException(status_code=500, detail="OpenAI API not configured")
-    
-    # Check cache
-    cache_key = generate_cache_key(request_data)
-    if cache_key in cache:
-        cached_response = cache[cache_key]
-        cached_response["processing_time"] = 0.01
-        cached_response["cached"] = True
-        return cached_response
-    
-    try:
-        messages = [{"role": "system", "content": request_data.system}]
-        messages.extend([{"role": m.role, "content": m.content} for m in request_data.messages])
-        
-        response = openai.ChatCompletion.create(
-            model=request_data.model,
-            messages=messages,
-            max_tokens=request_data.max_tokens,
-            temperature=request_data.temperature
-        )
-        
-        result = {
-            "content": response.choices[0].message.content,
-            "model": request_data.model,
-            "provider": "openai",
-            "tokens_used": response.usage.total_tokens,
-            "processing_time": time.time() - start_time,
-            "cached": False
-        }
-        
-        # Store in cache
-        cache[cache_key] = result
-        return result
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error calling OpenAI API: {str(e)}")
-
-# Generic endpoint that can use either provider
-@app.post("/api/generate", response_model=ResponseModel)
-async def generate_response(request: GenericLLMRequest, background_tasks: BackgroundTasks):
-    if request.provider.lower() == "anthropic":
-        claude_request = ClaudeRequest(
-            system=request.system,
-            messages=[Message(role=m["role"], content=m["content"]) for m in request.messages],
-            model=request.model,
-            max_tokens=request.max_tokens,
-            temperature=request.temperature,
-            cache_key=request.cache_key
-        )
-        return await call_claude(claude_request)
-    
-    elif request.provider.lower() == "openai":
-        openai_request = OpenAIRequest(
-            system=request.system,
-            messages=[Message(role=m["role"], content=m["content"]) for m in request.messages],
-            model=request.model,
-            max_tokens=request.max_tokens,
-            temperature=request.temperature,
-            cache_key=request.cache_key
-        )
-        return await call_openai(openai_request)
-    
-    else:
-        raise HTTPException(status_code=400, detail=f"Unsupported provider: {request.provider}")
-
-# Dedicated Claude endpoint
-@app.post("/api/claude", response_model=ResponseModel)
-async def claude_endpoint(request: ClaudeRequest):
-    return await call_claude(request)
-
-# Dedicated OpenAI endpoint
-@app.post("/api/openai", response_model=ResponseModel)
-async def openai_endpoint(request: OpenAIRequest):
-    return await call_openai(request)
-
-# Health check endpoint
+# Endpoints
 @app.get("/health")
-async def health_check():
+def health_check():
+    """Vérifie l'état du service"""
     providers = []
     
-    if ANTHROPIC_API_KEY:
+    # Vérifier Anthropic
+    if os.getenv("ANTHROPIC_API_KEY"):
         providers.append("anthropic")
     
-    if OPENAI_API_KEY:
+    # Vérifier OpenAI
+    if os.getenv("OPENAI_API_KEY"):
         providers.append("openai")
     
     if not providers:
         return {
             "status": "degraded",
-            "message": "No LLM providers configured"
+            "message": "Aucun fournisseur LLM configuré"
         }
     
     return {
         "status": "operational",
         "providers": providers,
-        "default_models": {
-            "anthropic": CLAUDE_MODEL,
-            "openai": OPENAI_MODEL
-        },
-        "cache_size": len(cache),
         "timestamp": time.time()
     }
 
-# Root endpoint with documentation info
-@app.get("/")
-async def root():
+@app.post("/generate", response_model=GenerateResponse)
+def generate_response(request: GenerateRequest):
+    """
+    Génère une réponse à partir du LLM spécifié avec le contexte fourni
+    """
+    start_time = time.time()
+    
+    # Génération d'une clé de cache basée sur la requête
+    if request.cache:
+        cache_key = json.dumps({
+            "system": request.system,
+            "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+            "model": request.model,
+            "temperature": request.temperature,
+            "provider": request.provider
+        })
+        
+        # Vérification du cache
+        if cache_key in response_cache:
+            cached_response = response_cache[cache_key]
+            cached_response["cached"] = True
+            cached_response["processing_time"] = time.time() - start_time
+            return cached_response
+    
+    # Configuration du modèle par défaut selon le fournisseur
+    provider = request.provider.lower() if request.provider else "anthropic"
+    
+    if provider == "anthropic":
+        default_model = os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20240620")
+        model = request.model or default_model
+        response = generate_with_anthropic(request.system, request.messages, model, request.temperature, request.max_tokens)
+        provider_name = "anthropic"
+    elif provider == "openai":
+        default_model = os.getenv("OPENAI_MODEL", "gpt-4")
+        model = request.model or default_model
+        response = generate_with_openai(request.system, request.messages, model, request.temperature, request.max_tokens)
+        provider_name = "openai"
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Fournisseur LLM non supporté: {provider}"
+        )
+    
+    # Formatage de la réponse
+    result = {
+        "content": response["content"],
+        "model": response["model"],
+        "usage": response["usage"],
+        "cached": False,
+        "provider": provider_name,
+        "processing_time": time.time() - start_time
+    }
+    
+    # Mise en cache si activé
+    if request.cache:
+        response_cache[cache_key] = result
+    
+    return result
+
+def generate_with_anthropic(system: str, messages: List[Message], model: str, temperature: float, max_tokens: int):
+    """Génère une réponse avec l'API Anthropic Claude"""
+    try:
+        client = get_anthropic_client()
+        
+        # Formatage des messages pour l'API Anthropic
+        formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
+        
+        # Appel à l'API
+        response = client.messages.create(
+            model=model,
+            system=system,
+            messages=formatted_messages,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+        
+        # Extraction du contenu de la réponse
+        content = response.content[0].text if response.content else ""
+        
+        return {
+            "content": content,
+            "model": model,
+            "usage": {
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens
+            }
+        }
+    except Exception as e:
+        logger.error(f"Erreur lors de l'appel à Anthropic: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'appel à l'API Anthropic: {str(e)}"
+        )
+
+def generate_with_openai(system: str, messages: List[Message], model: str, temperature: float, max_tokens: int):
+    """Génère une réponse avec l'API OpenAI"""
+    try:
+        client = get_openai_client()
+        
+        # Formatage des messages pour l'API OpenAI
+        formatted_messages = [{"role": "system", "content": system}]
+        formatted_messages.extend([{"role": m.role, "content": m.content} for m in messages])
+        
+        # Appel à l'API
+        response = client.chat.completions.create(
+            model=model,
+            messages=formatted_messages,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+        
+        # Extraction du contenu de la réponse
+        content = response.choices[0].message.content if response.choices else ""
+        
+        return {
+            "content": content,
+            "model": model,
+            "usage": {
+                "input_tokens": response.usage.prompt_tokens,
+                "output_tokens": response.usage.completion_tokens
+            }
+        }
+    except Exception as e:
+        logger.error(f"Erreur lors de l'appel à OpenAI: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'appel à l'API OpenAI: {str(e)}"
+        )
+
+# Endpoint pour l'aide sur la configuration des systèmes prompts
+@app.get("/prompts/templates")
+def get_prompt_templates():
+    """Renvoie des templates prédéfinis de system prompts pour différents cas d'usage"""
     return {
-        "name": "TechnicIA LLM Service",
-        "version": "1.0.0",
-        "documentation": "/docs",
-        "healthcheck": "/health"
+        "templates": [
+            {
+                "name": "question_answering",
+                "description": "Template pour répondre à des questions basées sur un contexte",
+                "template": "Tu es TechnicIA, un assistant de maintenance technique spécialisé dans l'analyse de documentation technique industrielle. Tu dois répondre aux questions en te basant uniquement sur le contexte fourni, qui contient des extraits de documentation et des références à des schémas techniques.\n\nInstructions spécifiques:\n- Utilise uniquement les informations dans le CONTEXTE fourni\n- Si le contexte ne contient pas l'information demandée, indique-le clairement\n- Cite les numéros de page des sources quand c'est pertinent\n- Quand tu mentionnes un schéma, réfère-toi au numéro du SCHÉMA ([SCHÉMA X])\n- Présente les informations techniques de manière claire et précise\n- Adapte ton niveau de détail technique à la question posée"
+            },
+            {
+                "name": "diagnostic",
+                "description": "Template pour créer un plan de diagnostic technique",
+                "template": "Tu es TechnicIA, un assistant de diagnostic technique pour les équipements industriels. Tu dois créer un plan de diagnostic structuré en étapes, basé sur les symptômes initiaux et le contexte fourni. Ce plan sera utilisé pour guider un technicien dans un processus de diagnostic pas à pas.\n\nTon plan de diagnostic doit :\n\n1. Comprendre entre 5 et 7 étapes logiques\n2. Suivre une approche méthodique d'élimination des causes\n3. Aller du plus probable au moins probable\n4. Inclure pour chaque étape :\n   - Un titre court descriptif\n   - Une description détaillée de ce qu'il faut vérifier\n   - Des instructions précises pour les tests à effectuer\n   - Les résultats attendus (normal vs. anormal)\n   - Une question spécifique à poser au technicien"
+            },
+            {
+                "name": "maintenance_procedure",
+                "description": "Template pour générer des procédures de maintenance",
+                "template": "Tu es TechnicIA, un expert en maintenance industrielle. À partir du contexte fourni, génère une procédure de maintenance détaillée et structurée. La procédure doit être précise, suivre les recommandations du fabricant, et inclure les précautions de sécurité nécessaires.\n\nLa procédure doit inclure:\n1. Outils et équipements nécessaires\n2. Équipements de protection individuelle requis\n3. Étapes préliminaires (mise hors tension, etc.)\n4. Procédure pas à pas numérotée\n5. Tests de validation après intervention\n6. Remarques et avertissements importants"
+            }
+        ]
     }
 
+# Point d'entrée principal
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8004))
+    port = int(os.getenv("LLM_SERVICE_PORT", "8004"))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
