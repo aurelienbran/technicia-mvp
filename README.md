@@ -108,19 +108,31 @@ L'architecture de TechnicIA MVP v1 est basée sur des microservices interconnect
 │  (Interface)  │      │  (Orchestration)│
 └───────────────┘      └────────┬────────┘
                                 │
-       ┌──────────────┬─────────┼─────────┬─────────────┐
-       │              │         │         │             │
-┌──────▼─────┐ ┌──────▼─────┐ ┌─▼───────┐ ┌───────────┐
-│ Document   │ │ Schema     │ │ Vector  │ │ Qdrant    │
-│ Processor  │ │ Analyzer   │ │ Engine  │ │ (Vector DB)│
-└────────────┘ └────────────┘ └─────────┘ └───────────┘
+┌─────────────┬─────────────┬───▼────────┬───────────┬───────────┐
+│             │             │            │           │           │
+│  Document   │  Schema     │  Vector    │  Vector   │  Claude   │
+│  Processor  │  Analyzer   │  Engine    │  Store    │  Service  │
+└──────┬──────┘└──────┬─────┘└─────┬─────┘└─────┬────┘└─────┬────┘
+       │              │           │            │           │
+       │              │           │            │           │
+       └──────────────┴───────────┴────────────┴───────────┘
+                                  │
+                                  ▼
+                            ┌────────────┐
+                            │  Qdrant    │
+                            │ (Vector DB)│
+                            └────────────┘
 ```
 
-- **Document Processor**: Traitement des PDF et extraction du contenu
-- **Schema Analyzer**: Classification des images techniques via Vision AI
-- **Vector Engine**: Gestion des embeddings et indexation
-- **Qdrant**: Base de données vectorielle
-- **n8n**: Orchestrateur des workflows
+### Rôles des microservices
+
+- **Document Processor**: Traitement des PDF et extraction du contenu textuel et visuel via Google Document AI.
+- **Schema Analyzer**: Classification des images techniques et extraction de contenu via Google Vision AI.
+- **Vector Engine**: Gestion des embeddings et indexation, incluant le chunking de texte et la création de vecteurs d'embeddings.
+- **Vector Store**: Service dédié à la recherche vectorielle qui offre une API simplifiée pour interagir avec Qdrant.
+- **Claude Service**: Interface robuste avec l'API Claude d'Anthropic, gérant les prompts, le contexte et les mécanismes de retry.
+- **Qdrant**: Base de données vectorielle pour le stockage et la recherche efficace des embeddings.
+- **n8n**: Orchestrateur de workflows qui coordonne les interactions entre les services.
 
 ## 🖥️ Utilisation
 
@@ -190,18 +202,19 @@ Ce workflow gère l'ingestion des documents PDF:
 
 Ce workflow permet de poser des questions sur les documents indexés:
 1. Réception de la question via webhook
-2. Recherche de contexte pertinent dans Qdrant
-3. Génération de réponse avec Claude 3.5 ou GPT-4
+2. Recherche de contexte pertinent via Vector Store dans Qdrant
+3. Génération de réponse avec Claude Service
 4. Inclusion des schémas pertinents dans la réponse
 
 ### Workflow de diagnostic guidé
 
 Ce workflow permet un diagnostic pas à pas:
 1. Démarrage avec symptômes initiaux via webhook
-2. Génération d'un plan de diagnostic structuré
-3. Présentation séquentielle des étapes de diagnostic
-4. Collecte des résultats des tests à chaque étape
-5. Génération d'un rapport final de diagnostic
+2. Recherche de contexte initial via Vector Store
+3. Génération d'un plan de diagnostic structuré via Claude Service
+4. Présentation séquentielle des étapes de diagnostic
+5. Collecte des résultats des tests à chaque étape
+6. Génération d'un rapport final de diagnostic via Claude Service
 
 ## 🛠️ Maintenance
 
@@ -235,7 +248,8 @@ Pour tester les microservices individuellement:
 ./scripts/test-services.sh --document-processor
 ./scripts/test-services.sh --schema-analyzer
 ./scripts/test-services.sh --vector-engine
-./scripts/test-services.sh --qdrant
+./scripts/test-services.sh --vector-store
+./scripts/test-services.sh --claude-service
 ```
 
 ## 📊 Performances du MVP v1
