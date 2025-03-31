@@ -61,35 +61,14 @@
     },
     {
       "parameters": {
-        "url": "https://api.anthropic.com/v1/messages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "url": "=http://claude-service:8004/v1/diagnostic-plan",
+        "method": "POST",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "model",
-              "value": "claude-3-5-sonnet-20240620"
-            },
-            {
-              "name": "max_tokens",
-              "value": "4000"
-            },
-            {
-              "name": "temperature",
-              "value": "0.1"
-            },
-            {
-              "name": "system",
-              "value": "Tu es TechnicIA, un assistant de diagnostic technique pour les équipements industriels. Tu dois créer un plan de diagnostic structuré en étapes, basé sur les symptômes initiaux et le contexte fourni. Ce plan sera utilisé pour guider un technicien dans un processus de diagnostic pas à pas.\n\nTon plan de diagnostic doit :\n\n1. Comprendre entre 5 et 7 étapes logiques\n2. Suivre une approche méthodique d'élimination des causes\n3. Aller du plus probable au moins probable\n4. Inclure pour chaque étape :\n   - Un titre court descriptif\n   - Une description détaillée de ce qu'il faut vérifier\n   - Des instructions précises pour les tests à effectuer\n   - Les résultats attendus (normal vs. anormal)\n   - Une question spécifique à poser au technicien\n\nRéponds uniquement avec le plan de diagnostic structuré en JSON avec ce format :\n{\n  \"totalSteps\": nombre_étapes,\n  \"steps\": [\n    {\n      \"stepNumber\": 1,\n      \"title\": \"Titre de l'étape\",\n      \"description\": \"Description détaillée\",\n      \"instructions\": \"Instructions précises\",\n      \"expectedResults\": \"Résultats attendus\",\n      \"question\": \"Question pour le technicien\"\n    },\n    // autres étapes\n  ]\n}"
-            },
-            {
-              "name": "messages",
-              "value": "=[{\n  \"role\": \"user\",\n  \"content\": \"Je dois diagnostiquer un problème sur un équipement de type {{$json.equipmentType}} avec les symptômes suivants :\\n\\n{{$json.initialSymptoms}}\\n\\nVoici le contexte extrait de la documentation technique :\\n\\n{{$json.fullContext}}\\n\\nCrée un plan de diagnostic structuré pour m'aider à identifier et résoudre ce problème.\"\n}]"
-            }
-          ]
-        },
-        "options": {}
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"system_prompt\": \"Tu es TechnicIA, un assistant de diagnostic technique pour les équipements industriels. Tu dois créer un plan de diagnostic structuré en étapes, basé sur les symptômes initiaux et le contexte fourni. Ce plan sera utilisé pour guider un technicien dans un processus de diagnostic pas à pas.\\n\\nTon plan de diagnostic doit :\\n\\n1. Comprendre entre 5 et 7 étapes logiques\\n2. Suivre une approche méthodique d'élimination des causes\\n3. Aller du plus probable au moins probable\\n4. Inclure pour chaque étape :\\n   - Un titre court descriptif\\n   - Une description détaillée de ce qu'il faut vérifier\\n   - Des instructions précises pour les tests à effectuer\\n   - Les résultats attendus (normal vs. anormal)\\n   - Une question spécifique à poser au technicien\\n\\nRéponds uniquement avec le plan de diagnostic structuré en JSON avec ce format :\\n{\\n  \\\"totalSteps\\\": nombre_étapes,\\n  \\\"steps\\\": [\\n    {\\n      \\\"stepNumber\\\": 1,\\n      \\\"title\\\": \\\"Titre de l'étape\\\",\\n      \\\"description\\\": \\\"Description détaillée\\\",\\n      \\\"instructions\\\": \\\"Instructions précises\\\",\\n      \\\"expectedResults\\\": \\\"Résultats attendus\\\",\\n      \\\"question\\\": \\\"Question pour le technicien\\\"\\n    },\\n    // autres étapes\\n  ]\\n}\",\n  \"equipment_type\": \"{{$json.equipmentType}}\",\n  \"initial_symptoms\": \"{{$json.initialSymptoms}}\",\n  \"context\": \"{{$json.fullContext}}\",\n  \"model\": \"{{$env.ANTHROPIC_MODEL}}\",\n  \"max_tokens\": 4000,\n  \"temperature\": 0.1\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
       },
       "name": "Generate Diagnostic Plan",
       "type": "n8n-nodes-base.httpRequest",
@@ -97,13 +76,7 @@
       "position": [
         1120,
         300
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "1",
-          "name": "Claude API Authentication"
-        }
-      }
+      ]
     },
     {
       "parameters": {
@@ -203,35 +176,14 @@
     },
     {
       "parameters": {
-        "url": "https://api.anthropic.com/v1/messages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "url": "=http://claude-service:8004/v1/diagnosis-report",
+        "method": "POST",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "model",
-              "value": "claude-3-5-sonnet-20240620"
-            },
-            {
-              "name": "max_tokens",
-              "value": "4000"
-            },
-            {
-              "name": "temperature",
-              "value": "0.1"
-            },
-            {
-              "name": "system",
-              "value": "Tu es TechnicIA, un assistant de diagnostic technique pour les équipements industriels. Tu dois générer un rapport de diagnostic complet basé sur les informations recueillies pendant le processus de diagnostic.\n\nTon rapport doit comprendre :\n1. Un résumé des symptômes initiaux\n2. Les résultats clés de chaque étape du diagnostic\n3. Une analyse des causes probables\n4. Un diagnostic final avec niveau de confiance\n5. Des recommandations d'actions\n6. Éventuellement des pièces à remplacer ou des interventions spécifiques\n\nUtilise uniquement les informations fournies dans les données recueillies. Si certaines informations sont manquantes, indique-le clairement.\n\nRéponds en français avec un rapport structuré et professionnel."
-            },
-            {
-              "name": "messages",
-              "value": "=[{\n  \"role\": \"user\",\n  \"content\": \"Génère un rapport de diagnostic technique complet basé sur les informations suivantes :\\n\\nÉquipement : {{$json.equipmentType}}\\nSymptômes initiaux : {{$json.initialSymptoms}}\\n\\nDonnées recueillies durant le diagnostic :\\n{% for key, value in $json.collectedData %}\\nÉtape {{key.replace('step', '')}} - {{$json.diagnosticPlan.steps[key.replace('step', '')-1].title}} :\\nQuestion: {{$json.diagnosticPlan.steps[key.replace('step', '')-1].question}}\\nRéponse: {{value.response}}\\n{% if value.notes %}Notes: {{value.notes}}{% endif %}\\n{% endfor %}\\n\\nContexte technique (documentation) :\\n{{$json.context}}\\n\\nPrépare un rapport de diagnostic complet avec analyse des causes et recommandations.\"\n}]"
-            }
-          ]
-        },
-        "options": {}
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"system_prompt\": \"Tu es TechnicIA, un assistant de diagnostic technique pour les équipements industriels. Tu dois générer un rapport de diagnostic complet basé sur les informations recueillies pendant le processus de diagnostic.\\n\\nTon rapport doit comprendre :\\n1. Un résumé des symptômes initiaux\\n2. Les résultats clés de chaque étape du diagnostic\\n3. Une analyse des causes probables\\n4. Un diagnostic final avec niveau de confiance\\n5. Des recommandations d'actions\\n6. Éventuellement des pièces à remplacer ou des interventions spécifiques\\n\\nUtilise uniquement les informations fournies dans les données recueillies. Si certaines informations sont manquantes, indique-le clairement.\\n\\nRéponds en français avec un rapport structuré et professionnel.\",\n  \"equipment_type\": \"{{$json.equipmentType}}\",\n  \"initial_symptoms\": \"{{$json.initialSymptoms}}\",\n  \"collected_data\": {{$json.collectedData}},\n  \"context\": \"{{$json.context}}\",\n  \"steps\": {{$json.diagnosticPlan.steps}},\n  \"model\": \"{{$env.ANTHROPIC_MODEL}}\",\n  \"max_tokens\": 4000,\n  \"temperature\": 0.1\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
       },
       "name": "Generate Diagnosis Report",
       "type": "n8n-nodes-base.httpRequest",
@@ -239,13 +191,7 @@
       "position": [
         1120,
         480
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "1",
-          "name": "Claude API Authentication"
-        }
-      }
+      ]
     },
     {
       "parameters": {
