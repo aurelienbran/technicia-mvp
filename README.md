@@ -1,77 +1,101 @@
-# TechnicIA - Assistant Intelligent de Maintenance Technique
+# TechnicIA - Assistant Intelligent de Maintenance Technique (MVP v1)
 
 ![TechnicIA Logo](docs/images/logo.png)
 
 TechnicIA est un assistant intelligent de maintenance technique qui aide les techniciens à accéder rapidement à l'information pertinente et à diagnostiquer efficacement les problèmes sur les équipements industriels.
 
-## 🚀 Fonctionnalités du MVP
+## 🚀 Fonctionnalités du MVP v1
 
 - **Ingestion intelligente de documentation technique**
   - Traitement de fichiers PDF (manuels, schémas, etc.)
   - Extraction précise de texte et d'images via Document AI
   - Classification automatique des schémas techniques
+  - Support pour documents jusqu'à 150 Mo
 
 - **Base de connaissances vectorielle**
   - Vectorisation du contenu textuel et visuel
   - Recherche sémantique avancée
   - Organisation structurée des données
+  - Métadonnées riches pour chaque élément indexé
 
 - **Assistant de diagnostic intelligent**
   - Compréhension des descriptions de pannes en langage naturel
   - Méthodologie de diagnostic systématique
   - Recommandations techniques basées sur la documentation
+  - Visualisation des composants concernés sur les schémas
 
 - **Interface intuitive**
   - Upload simple de documents
   - Interface conversationnelle
   - Visualisation contextuelle des schémas
-
-## ⚠️ Note sur les modifications apportées
-
-La version actuelle contient des améliorations importantes des microservices pour résoudre un problème d'intégration entre n8n et les services d'ingestion. Les modifications préservent la compatibilité avec les anciennes implémentations tout en ajoutant de nouvelles fonctionnalités.
-
-**Changement principal :** Les services peuvent désormais traiter des fichiers à partir de leur chemin sur un système de fichiers partagé, évitant ainsi les transferts redondants de données volumineuses entre services.
-
-Voir [la documentation détaillée](docs/troubleshooting/workflow-ingestion.md) pour plus d'informations sur cette correction.
+  - Module de diagnostic guidé
 
 ## 📋 Prérequis
 
-- Docker et Docker Compose
+- Docker et Docker Compose v2.x ou supérieur
 - Compte Google Cloud avec Document AI et Vision AI configurés
 - Compte VoyageAI pour les embeddings (ou OpenAI comme alternative)
 - 4 Go de RAM minimum pour exécuter les services
+- 10 Go d'espace disque disponible
 
 ## ⚙️ Installation
 
-1. **Cloner le dépôt**
-   ```bash
-   git clone https://github.com/aurelienbran/technicia-mvp.git
-   cd technicia-mvp
-   ```
+### 1. Cloner le dépôt et accéder à la branche MVP v1
 
-2. **Configurer les variables d'environnement**
-   ```bash
-   cp .env.example .env
-   # Modifiez le fichier .env avec vos propres valeurs
-   ```
+```bash
+git clone https://github.com/aurelienbran/technicia-mvp.git
+cd technicia-mvp
+git checkout mvp-v1
+```
 
-3. **Configurer les identifiants Google Cloud**
-   - Téléchargez votre fichier de credentials JSON depuis Google Cloud
-   - Placez-le dans `services/document-processor/google-credentials.json`
-   - Placez une copie dans `services/schema-analyzer/google-credentials.json`
+### 2. Configurer les variables d'environnement
 
-4. **Démarrer les services**
-   ```bash
-   # Rendre le script exécutable
-   chmod +x scripts/start-technicia.sh
-   
-   # Démarrer les services
-   ./scripts/start-technicia.sh --build
-   ```
+```bash
+cp .env.example .env
+```
 
-## 🔧 Architecture
+Éditez le fichier `.env` avec vos propres valeurs. Configuration minimale requise:
 
-L'architecture de TechnicIA est basée sur des microservices interconnectés:
+```
+# Google Cloud
+DOCUMENT_AI_PROJECT=votre-projet-gcp
+DOCUMENT_AI_LOCATION=votre-région-gcp
+DOCUMENT_AI_PROCESSOR_ID=votre-processor-id
+
+# Embeddings (choisir l'un ou l'autre)
+VOYAGE_API_KEY=votre-clé-voyage-ai
+# OU
+OPENAI_API_KEY=votre-clé-openai
+
+# n8n (ne pas modifier)
+N8N_USER=admin
+N8N_PASSWORD=TechnicIA2025!
+```
+
+### 3. Configurer les identifiants Google Cloud
+
+- Téléchargez votre fichier de credentials JSON depuis Google Cloud Console
+- Placez-le dans les emplacements suivants:
+  ```bash
+  mkdir -p services/document-processor/
+  mkdir -p services/schema-analyzer/
+  cp votre-fichier-credentials.json services/document-processor/google-credentials.json
+  cp votre-fichier-credentials.json services/schema-analyzer/google-credentials.json
+  ```
+
+### 4. Démarrer les services
+
+```bash
+# Rendre le script exécutable
+chmod +x scripts/start-technicia.sh
+
+# Démarrer les services avec construction des images
+./scripts/start-technicia.sh --build
+```
+
+## 🔧 Architecture du MVP v1
+
+L'architecture de TechnicIA MVP v1 est basée sur des microservices interconnectés:
 
 ```
 ┌───────────────┐      ┌─────────────────┐
@@ -81,28 +105,17 @@ L'architecture de TechnicIA est basée sur des microservices interconnectés:
                                 │
        ┌──────────────┬─────────┼─────────┬─────────────┐
        │              │         │         │             │
-┌──────▼─────┐ ┌──────▼─────┐ ┌─▼───────┐ ┌───────────┐ ┌───────────┐
-│ Document   │ │ Schema     │ │ Vector  │ │ Qdrant    │ │ Diagnosis │
-│ Processor  │ │ Analyzer   │ │ Engine  │ │ (Vector DB)│ │ Engine   │
-└────────────┘ └────────────┘ └─────────┘ └───────────┘ └───────────┘
+┌──────▼─────┐ ┌──────▼─────┐ ┌─▼───────┐ ┌───────────┐
+│ Document   │ │ Schema     │ │ Vector  │ │ Qdrant    │
+│ Processor  │ │ Analyzer   │ │ Engine  │ │ (Vector DB)│
+└────────────┘ └────────────┘ └─────────┘ └───────────┘
 ```
 
-- **Document Processor**: Extraction du texte et des images des PDFs
-  - API classique: `/process` (attend un fichier binaire)
-  - Nouvelle API: `/api/process` (accepte un chemin de fichier)
-
-- **Schema Analyzer**: Classification des schémas techniques
-  - Basé sur Vision AI pour identifier et classifier les images techniques
-  - API batch: `/api/analyze` pour traiter plusieurs images d'un document
-  - API unitaire: `/api/analyze-image` pour analyser une image spécifique
-
-- **Vector Engine**: Vectorisation et indexation du contenu
-  - Vectorisation des textes et images en embeddings
-  - Stockage dans la base vectorielle Qdrant
-  - API de recherche sémantique
-
-- **n8n**: Orchestration des workflows d'ingestion et de recherche
-  - Workflow principal: `technicia-ingestion-pure-microservices-fixed.json`
+- **Document Processor**: Traitement des PDF et extraction du contenu
+- **Schema Analyzer**: Classification des images techniques via Vision AI
+- **Vector Engine**: Gestion des embeddings et indexation
+- **Qdrant**: Base de données vectorielle
+- **n8n**: Orchestrateur des workflows
 
 ## 🖥️ Utilisation
 
@@ -141,7 +154,7 @@ docker-compose logs -f document-processor
 
 ## 🔍 Workflows disponibles
 
-### technicia-ingestion-pure-microservices-fixed.json
+### Workflow d'ingestion
 
 Ce workflow gère l'ingestion des documents PDF:
 1. Réception du PDF via webhook
@@ -151,7 +164,7 @@ Ce workflow gère l'ingestion des documents PDF:
 5. Vectorisation et indexation par Vector Engine
 6. Notification de fin de traitement
 
-### question.json
+### Workflow de question-réponse
 
 Ce workflow permet de poser des questions sur les documents indexés:
 1. Réception de la question via webhook
@@ -194,9 +207,9 @@ Pour tester les microservices individuellement:
 ./scripts/test-services.sh --qdrant
 ```
 
-## 📊 Performances
+## 📊 Performances du MVP v1
 
-Le MVP est conçu pour traiter des documents techniques avec les caractéristiques suivantes:
+Le MVP v1 est conçu pour traiter des documents techniques avec les caractéristiques suivantes:
 - Taille de fichier: jusqu'à 150 Mo
 - Types de documents: PDF (manuels techniques, schémas, guides)
 - Temps de traitement moyen: ~1-2 min pour un document de 50 pages
