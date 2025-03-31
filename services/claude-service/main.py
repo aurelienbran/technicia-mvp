@@ -4,6 +4,8 @@ Fournit une couche d'abstraction robuste pour les appels à Claude avec gestion 
 """
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 import httpx
 import os
 import logging
@@ -25,6 +27,15 @@ app = FastAPI(
     title="Claude Service",
     description="Service d'interaction avec l'API Claude d'Anthropic pour TechnicIA",
     version="1.0.0"
+)
+
+# Configuration CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Configuration Anthropic
@@ -115,6 +126,7 @@ class ClaudeService:
             )
         
         try:
+            start_time = time.time()
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.base_url}/messages",
@@ -134,7 +146,15 @@ class ClaudeService:
                         detail=f"Erreur API Claude: {response.text}"
                     )
                 
-                return response.json()
+                processing_time = time.time() - start_time
+                response_data = response.json()
+                
+                # Ajouter des métriques de performance
+                response_data["metrics"] = {
+                    "processing_time_seconds": processing_time
+                }
+                
+                return response_data
         except httpx.HTTPError as e:
             logger.error(f"Erreur HTTP lors de l'appel à Claude: {str(e)}")
             raise
@@ -309,6 +329,34 @@ class ClaudeService:
                 status_code=500,
                 detail=f"Erreur lors de la génération du rapport de diagnostic: {str(e)}"
             )
+
+# Personnalisation du schéma OpenAPI
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title="TechnicIA Claude Service API",
+        version="1.0.0",
+        description="Service d'interaction avec l'API Claude (Anthropic) pour TechnicIA",
+        routes=app.routes,
+    )
+    
+    # Charger le schéma OpenAPI personnalisé si le fichier existe
+    schema_path = os.path.join(os.path.dirname(__file__), "openapi.yaml")
+    if os.path.exists(schema_path):
+        try:
+            import yaml
+            with open(schema_path, 'r') as f:
+                openapi_schema = yaml.safe_load(f)
+                logger.info("Schéma OpenAPI personnalisé chargé depuis openapi.yaml")
+        except Exception as e:
+            logger.warning(f"Impossible de charger le schéma OpenAPI personnalisé: {e}")
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 # Créer une instance du service
 claude_service = ClaudeService(
