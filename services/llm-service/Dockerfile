@@ -1,23 +1,19 @@
-FROM python:3.11-slim
+FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install dependencies
+# Installation des dépendances
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copie du code source
 COPY . .
 
-# Set environment variables
-ENV PORT=8004 \
-    ANTHROPIC_API_KEY="" \
-    CLAUDE_MODEL="claude-3-5-sonnet-20240620" \
-    OPENAI_API_KEY="" \
-    OPENAI_MODEL="gpt-4o"
+# Variable d'environnement pour Python
+ENV PYTHONUNBUFFERED=1
 
-# Expose port for API
-EXPOSE ${PORT}
+# Port exposé
+EXPOSE 8004
 
-# Start the application
+# Commande de démarrage
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8004"]
