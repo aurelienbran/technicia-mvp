@@ -1,19 +1,21 @@
-FROM python:3.10-slim
+FROM python:3.9-slim
 
 WORKDIR /app
 
-# Installation des dépendances
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copie du code source
 COPY . .
 
-# Variable d'environnement pour Python
-ENV PYTHONUNBUFFERED=1
+# Healthcheck pour le service
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:${LLM_SERVICE_PORT:-8005}/health || exit 1
 
-# Port exposé
-EXPOSE 8004
+# Exposition du port API
+EXPOSE ${LLM_SERVICE_PORT:-8005}
 
-# Commande de démarrage
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8004"]
+CMD ["python", "app.py"]
