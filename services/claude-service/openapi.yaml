@@ -1,0 +1,329 @@
+openapi: 3.0.0
+info:
+  title: TechnicIA Claude Service API
+  description: Service d'interaction avec l'API Claude (Anthropic) pour TechnicIA
+  version: 1.0.0
+  contact:
+    email: contact@technicia.fr
+
+servers:
+  - url: http://localhost:8004
+    description: Local Development Server
+  - url: http://claude-service:8004
+    description: Docker Service
+
+paths:
+  /health:
+    get:
+      summary: Vérification de l'état du service
+      description: Vérifie que le service est en ligne et correctement configuré
+      responses:
+        '200':
+          description: Service en bon état
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  anthropic_api_configured:
+                    type: boolean
+                    example: true
+                  model:
+                    type: string
+                    example: "claude-3-5-sonnet-20240620"
+                  version:
+                    type: string
+                    example: "1.0.0"
+        '500':
+          description: Erreur du service
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "API key not configured"
+
+  /v1/complete:
+    post:
+      summary: Génère une complétion Claude générique
+      description: Appelle l'API Claude avec un format de requête standard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompletionRequest'
+      responses:
+        '200':
+          description: Réponse de Claude
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '500':
+          description: Erreur du service
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/question:
+    post:
+      summary: Répond à une question en utilisant un contexte
+      description: Génère une réponse à une question avec un contexte et un système prompt spécifiques
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionRequest'
+      responses:
+        '200':
+          description: Réponse de Claude
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '500':
+          description: Erreur du service
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/diagnostic-plan:
+    post:
+      summary: Génère un plan de diagnostic technique
+      description: Crée un plan de diagnostic étape par étape pour un problème technique
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiagnosticPlanRequest'
+      responses:
+        '200':
+          description: Plan de diagnostic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '500':
+          description: Erreur du service
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/diagnosis-report:
+    post:
+      summary: Génère un rapport de diagnostic technique
+      description: Crée un rapport de diagnostic basé sur les données recueillies pendant le processus de diagnostic
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiagnosisReportRequest'
+      responses:
+        '200':
+          description: Rapport de diagnostic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '500':
+          description: Erreur du service
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    Message:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+          description: Rôle du message dans la conversation
+        content:
+          type: string
+          description: Contenu du message
+
+    CompletionRequest:
+      type: object
+      required:
+        - messages
+      properties:
+        system:
+          type: string
+          description: Instructions système pour Claude
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+          description: Liste des messages dans la conversation
+        model:
+          type: string
+          description: Modèle Claude à utiliser
+          default: "claude-3-5-sonnet-20240620"
+        max_tokens:
+          type: integer
+          description: Nombre maximum de tokens pour la réponse
+          default: 4000
+        temperature:
+          type: number
+          description: Température pour la génération de texte (0.0 à 1.0)
+          default: 0.2
+
+    QuestionRequest:
+      type: object
+      required:
+        - system_prompt
+        - context
+        - question
+      properties:
+        system_prompt:
+          type: string
+          description: Instructions système pour Claude
+        context:
+          type: string
+          description: Contexte à fournir à Claude
+        question:
+          type: string
+          description: Question de l'utilisateur
+        model:
+          type: string
+          description: Modèle Claude à utiliser
+          default: "claude-3-5-sonnet-20240620"
+        max_tokens:
+          type: integer
+          description: Nombre maximum de tokens pour la réponse
+          default: 4000
+        temperature:
+          type: number
+          description: Température pour la génération de texte
+          default: 0.2
+
+    DiagnosticPlanRequest:
+      type: object
+      required:
+        - system_prompt
+        - equipment_type
+        - initial_symptoms
+        - context
+      properties:
+        system_prompt:
+          type: string
+          description: Instructions système pour Claude
+        equipment_type:
+          type: string
+          description: Type d'équipement
+        initial_symptoms:
+          type: string
+          description: Description des symptômes initiaux
+        context:
+          type: string
+          description: Contexte technique
+        model:
+          type: string
+          description: Modèle Claude à utiliser
+          default: "claude-3-5-sonnet-20240620"
+        max_tokens:
+          type: integer
+          description: Nombre maximum de tokens pour la réponse
+          default: 4000
+        temperature:
+          type: number
+          description: Température pour la génération de texte
+          default: 0.1
+
+    DiagnosisReportRequest:
+      type: object
+      required:
+        - system_prompt
+        - equipment_type
+        - initial_symptoms
+        - collected_data
+        - context
+        - steps
+      properties:
+        system_prompt:
+          type: string
+          description: Instructions système pour Claude
+        equipment_type:
+          type: string
+          description: Type d'équipement
+        initial_symptoms:
+          type: string
+          description: Description des symptômes initiaux
+        collected_data:
+          type: object
+          description: Données recueillies pendant le diagnostic
+        context:
+          type: string
+          description: Contexte technique
+        steps:
+          type: array
+          description: Étapes du plan de diagnostic
+          items:
+            type: object
+        model:
+          type: string
+          description: Modèle Claude à utiliser
+          default: "claude-3-5-sonnet-20240620"
+        max_tokens:
+          type: integer
+          description: Nombre maximum de tokens pour la réponse
+          default: 4000
+        temperature:
+          type: number
+          description: Température pour la génération de texte
+          default: 0.1
+
+    ApiResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Identifiant de la réponse
+        content:
+          type: array
+          items:
+            type: object
+            properties:
+              text:
+                type: string
+                description: Texte de la réponse
+              type:
+                type: string
+                description: Type de contenu
+        model:
+          type: string
+          description: Modèle utilisé
+        metrics:
+          type: object
+          properties:
+            processing_time_seconds:
+              type: number
+              description: Temps de traitement en secondes
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Description de l'erreur
