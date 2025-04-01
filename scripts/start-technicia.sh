@@ -10,6 +10,7 @@
 #   --stop            Arrête tous les services
 #   --import FILE.pdf Importe un fichier PDF pour test
 #   --setup-optimized Configure n8n avec les workflows optimisés
+#   --setup-corrected Configure n8n avec les workflows corrigés
 #   -h, --help        Affiche cette aide
 
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
@@ -21,6 +22,9 @@ WORKFLOWS_DIR="$PROJECT_DIR/workflows"
 OPTIMIZED_INGESTION="$WORKFLOWS_DIR/technicia-ingestion-optimized.json"
 OPTIMIZED_QUESTION="$WORKFLOWS_DIR/question-optimized.json"
 OPTIMIZED_DIAGNOSTIC="$WORKFLOWS_DIR/diagnostic-optimized.json"
+CORRECTED_INGESTION="$WORKFLOWS_DIR/technicia-ingestion-corrected.json"
+CORRECTED_QUESTION="$WORKFLOWS_DIR/question-corrected.json"
+CORRECTED_DIAGNOSTIC="$WORKFLOWS_DIR/diagnostic-corrected.json"
 
 # Vérification des prérequis
 check_prerequisites() {
@@ -178,6 +182,46 @@ setup_optimized_workflows() {
     echo "ℹ️  Pour plus d'informations, consultez le guide: docs/GUIDE_WORKFLOWS_OPTIMISES.md"
 }
 
+# Configure n8n avec les workflows corrigés
+setup_corrected_workflows() {
+    echo "🔧 Configuration de n8n avec les workflows CORRIGÉS..."
+    
+    # Vérifier que les services sont démarrés
+    if ! docker-compose -f "$COMPOSE_FILE" ps | grep -q "Up"; then
+        echo "❌ Les services ne sont pas démarrés. Veuillez les démarrer avant de configurer n8n."
+        exit 1
+    fi
+    
+    # Vérifier l'existence des fichiers de workflow corrigés
+    if [ ! -f "$CORRECTED_INGESTION" ] || [ ! -f "$CORRECTED_QUESTION" ] || [ ! -f "$CORRECTED_DIAGNOSTIC" ]; then
+        echo "❌ Les fichiers de workflow corrigés n'ont pas été trouvés."
+        echo "Veuillez vérifier que vous avez bien les fichiers suivants:"
+        echo "- $CORRECTED_INGESTION"
+        echo "- $CORRECTED_QUESTION"
+        echo "- $CORRECTED_DIAGNOSTIC"
+        exit 1
+    fi
+    
+    echo "📝 Pour importer les workflows CORRIGÉS, suivez ces étapes:"
+    echo ""
+    echo "1. Accédez à n8n: http://localhost:5678"
+    echo "2. Dans la section 'Workflows', cliquez sur 'Import from File'"
+    echo "3. Importez les fichiers suivants dans cet ordre:"
+    echo "   - technicia-ingestion-corrected.json"
+    echo "   - question-corrected.json"
+    echo "   - diagnostic-corrected.json"
+    echo "4. Activez chaque workflow en cliquant sur le bouton 'Active'"
+    echo ""
+    echo "⚠️  N'oubliez pas de configurer l'authentification pour Claude:"
+    echo "   Settings > Credentials > Add Credential > HTTP Header Auth"
+    echo "   - Name: Claude API Authentication"
+    echo "   - Name: x-api-key"
+    echo "   - Value: <votre clé API Anthropic>"
+    echo ""
+    echo "ℹ️  Ces workflows corrigés sont RECOMMANDÉS pour une compatibilité garantie avec les microservices existants."
+    echo "ℹ️  Pour plus d'informations, consultez le guide: docs/GUIDE_WORKFLOWS_CORRIGES.md"
+}
+
 # Afficher l'aide
 show_help() {
     echo "Usage: $0 [option]"
@@ -189,6 +233,7 @@ show_help() {
     echo "  --stop            Arrête tous les services"
     echo "  --import FILE.pdf Importe un fichier PDF pour test"
     echo "  --setup-optimized Configure n8n avec les workflows optimisés"
+    echo "  --setup-corrected Configure n8n avec les workflows CORRIGÉS (recommandé)"
     echo "  -h, --help        Affiche cette aide"
 }
 
@@ -228,6 +273,9 @@ else
             ;;
         --setup-optimized)
             setup_optimized_workflows
+            ;;
+        --setup-corrected)
+            setup_corrected_workflows
             ;;
         -h|--help)
             show_help
