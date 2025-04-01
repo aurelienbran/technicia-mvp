@@ -98,6 +98,23 @@ chmod +x scripts/start-technicia.sh
 ./scripts/start-technicia.sh --build
 ```
 
+## 🆕 Workflows Corrigés pour TechnicIA
+
+Nous avons ajouté de nouveaux workflows corrigés qui garantissent une compatibilité parfaite avec les microservices existants :
+
+```bash
+# Configurer les workflows corrigés (recommandé)
+./scripts/start-technicia.sh --setup-corrected
+```
+
+Ces workflows corrigés résolvent plusieurs problèmes :
+- Correction des problèmes DNS entre les services
+- Format binaire correct pour l'upload de fichiers
+- Meilleure compatibilité avec les API des microservices
+- Robustesse et validation améliorées
+
+Pour plus d'informations, consultez le guide détaillé : [Guide des Workflows Corrigés](docs/GUIDE_WORKFLOWS_CORRIGES.md)
+
 ## 🔧 Architecture du MVP v1
 
 L'architecture de TechnicIA MVP v1 est basée sur des microservices interconnectés:
@@ -161,9 +178,9 @@ Ce credential sera automatiquement utilisé par les workflows de question et de 
 1. Dans n8n, allez dans "Workflows"
 2. Cliquez sur "Import from File"
 3. Importez les fichiers dans l'ordre suivant:
-   - `workflows/technicia-ingestion-pure-microservices-fixed10.json` (dernière version stable)
-   - `workflows/question.json`
-   - `workflows/diagnosis.json`
+   - `workflows/technicia-ingestion-corrected.json` (version corrigée recommandée)
+   - `workflows/question-corrected.json`
+   - `workflows/diagnostic-corrected.json`
 4. Pour chaque workflow importé, activez-le avec le bouton "Active"
 
 ### Importer un PDF pour test
