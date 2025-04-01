@@ -176,13 +176,14 @@ services:
 
   # Frontend (pour le MVP)
   frontend:
-    image: nginx:alpine
-    volumes:
-      - ./frontend:/usr/share/nginx/html
+    build:
+      context: ./frontend
     ports:
       - "3000:80"
     networks:
       - technicia_network
+    depends_on:
+      - n8n
 
 networks:
   technicia_network:
