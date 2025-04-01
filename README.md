@@ -161,7 +161,7 @@ Ce credential sera automatiquement utilisé par les workflows de question et de 
 1. Dans n8n, allez dans "Workflows"
 2. Cliquez sur "Import from File"
 3. Importez les fichiers dans l'ordre suivant:
-   - `workflows/technicia-ingestion-pure-microservices-fixed.json`
+   - `workflows/technicia-ingestion-pure-microservices-fixed10.json` (dernière version stable)
    - `workflows/question.json`
    - `workflows/diagnosis.json`
 4. Pour chaque workflow importé, activez-le avec le bouton "Active"
