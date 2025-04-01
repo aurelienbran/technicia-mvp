@@ -1,0 +1,308 @@
+{
+  "name": "Diagnostic Optimisé",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "diagnostic",
+        "options": {}
+      },
+      "id": "e63c3da4-ebc7-47be-8c67-7fd02e44cb75",
+      "name": "Webhook Diagnostic",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        540,
+        380
+      ],
+      "webhookId": "2ef1d0c5-f63b-45e6-bc81-4acb53af222d"
+    },
+    {
+      "parameters": {
+        "url": "=http://vector-store:8000/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"diagnostic {{ $json.symptoms }}\",\n  \"limit\": 8,\n  \"searchType\": \"hybrid\",\n  \"includeImages\": true\n}",
+        "options": {}
+      },
+      "id": "cb6a9cac-1aca-47a0-92fa-7a56caf3c2c9",
+      "name": "Recherche initiale",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        820,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Préparer le contexte pour Claude\nconst results = items[0].json.results || [];\nconst symptoms = items[0].json.symptoms || \"\";\nconst equipment = items[0].json.equipment || \"\";\n\n// Extraire le texte des résultats\nlet contextTexts = [];\nlet images = [];\n\nresults.forEach(result => {\n  // Ajouter le contenu textuel\n  if (result.payload && result.payload.content) {\n    contextTexts.push(result.payload.content);\n  }\n  \n  // Récupérer les images\n  if (result.payload && result.payload.type === 'image' && result.payload.imagePath) {\n    images.push({\n      path: result.payload.imagePath,\n      caption: result.payload.caption || 'Schéma technique'\n    });\n  }\n});\n\n// Limiter la taille du contexte\nlet context = contextTexts.join('\\n\\n').substring(0, 10000);\n\n// Eliminer les doublons d'images\nconst uniqueImages = Array.from(new Set(images.map(img => img.path)))\n  .map(path => {\n    return images.find(img => img.path === path);\n  });\n\nreturn [{\n  json: {\n    symptoms,\n    equipment,\n    context,\n    images: uniqueImages.slice(0, 3),\n    sessionId: Math.random().toString(36).substring(2, 15),\n    step: 1\n  }\n}];"
+      },
+      "id": "4f0761a6-4fd1-4da9-a9f9-08a47cd5da89",
+      "name": "Initialiser Diagnostic",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://claude-service:8004/diagnostic",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"symptoms\": \"{{ $json.symptoms }}\",\n  \"equipment\": \"{{ $json.equipment }}\",\n  \"context\": \"{{ $json.context }}\",\n  \"session_id\": \"{{ $json.sessionId }}\",\n  \"step\": {{ $json.step }},\n  \"max_tokens\": 1500,\n  \"temperature\": 0.2\n}",
+        "options": {}
+      },
+      "id": "d1e8af92-7fa5-4e46-ab6c-c22a73a60ef9",
+      "name": "Générer Plan Diagnostic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        380
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Claude API Authentication"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parser et structurer le plan de diagnostic\nconst diagnosticPlan = items[0].json.diagnostic_plan || [];\nconst sessionId = items[0].json.session_id || items[0].json.sessionId;\nconst images = items[0].json.images || [];\n\n// Structurer le plan et les étapes\nconst structuredPlan = {\n  sessionId,\n  title: items[0].json.title || \"Plan de diagnostic\",\n  symptoms: items[0].json.symptoms,\n  equipment: items[0].json.equipment,\n  overview: items[0].json.overview || \"Plan de diagnostic basé sur les symptômes décrits\",\n  steps: diagnosticPlan,\n  images: images.map(img => ({\n    url: img.path.replace('/tmp/technicia-docs/', '/images/'),\n    caption: img.caption || 'Schéma technique'\n  })),\n  currentStep: 0,\n  totalSteps: diagnosticPlan.length,\n  status: \"ready\"\n};\n\nreturn [{\n  json: structuredPlan\n}];"
+      },
+      "id": "5d1ca45e-04fd-424e-aa4e-73af6de7d4a9",
+      "name": "Structurer Plan",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1620,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "8a9d3b27-c05d-486b-8d82-b3cbaf6d9fa6",
+      "name": "Répondre au Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1880,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "diagnostic/step",
+        "options": {}
+      },
+      "id": "a63c3da6-ebc7-47be-8c67-7fd02e44cb79",
+      "name": "Webhook Étape Diagnostic",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        540,
+        620
+      ],
+      "webhookId": "7ef1d0c5-f63b-45e6-bc81-4acb53af673d"
+    },
+    {
+      "parameters": {
+        "url": "=http://claude-service:8004/diagnostic/step",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"session_id\": \"{{ $json.sessionId }}\",\n  \"step_index\": {{ $json.stepIndex }},\n  \"step_result\": \"{{ $json.stepResult }}\",\n  \"previous_context\": {{ $json.previousContext || '[]' }},\n  \"max_tokens\": 800\n}",
+        "options": {}
+      },
+      "id": "d1e8af96-7fa5-4e46-ab6c-c22a73a60ef1",
+      "name": "Traiter Étape",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        820,
+        620
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Claude API Authentication"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Mettre à jour l'état du diagnostic\nconst result = items[0].json;\nconst sessionId = result.session_id;\nconst stepIndex = result.step_index;\nconst nextStep = result.next_step;\nconst diagnostic = result.diagnostic || {};\n\n// Structurer la réponse\nconst response = {\n  sessionId,\n  currentStep: stepIndex,\n  nextStepIndex: nextStep.index,\n  stepComplete: true,\n  stepResult: result.interpretation || \"Étape complétée\",\n  nextStepInstructions: nextStep.instructions || \"\",\n  status: nextStep.isFinal ? \"complete\" : \"in_progress\",\n  possibleCauses: diagnostic.possible_causes || [],\n  recommendedFixes: diagnostic.recommended_fixes || [],\n  diagnosticSummary: diagnostic.summary || \"\"\n};\n\nreturn [{\n  json: response\n}];"
+      },
+      "id": "5d1ca49e-04fd-424e-aa4e-73af6de7d4b1",
+      "name": "Structurer Réponse Étape",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "8a9d3b57-c05d-486b-8d82-b3cbaf6d9fa8",
+      "name": "Répondre Étape",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        620
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Diagnostic": {
+      "main": [
+        [
+          {
+            "node": "Recherche initiale",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recherche initiale": {
+      "main": [
+        [
+          {
+            "node": "Initialiser Diagnostic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialiser Diagnostic": {
+      "main": [
+        [
+          {
+            "node": "Générer Plan Diagnostic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Générer Plan Diagnostic": {
+      "main": [
+        [
+          {
+            "node": "Structurer Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structurer Plan": {
+      "main": [
+        [
+          {
+            "node": "Répondre au Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Étape Diagnostic": {
+      "main": [
+        [
+          {
+            "node": "Traiter Étape",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Traiter Étape": {
+      "main": [
+        [
+          {
+            "node": "Structurer Réponse Étape",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structurer Réponse Étape": {
+      "main": [
+        [
+          {
+            "node": "Répondre Étape",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "id": "1",
+      "name": "TechnicIA",
+      "color": "#50e3c2"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-04-01T00:00:00.000Z",
+  "versionId": "eb6774d2-61d9-4c3d-a4d7-f65a6ac1bb23"
+}
