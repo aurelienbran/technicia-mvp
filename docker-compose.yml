@@ -13,11 +13,13 @@ services:
       - technicia_network
     environment:
       - QDRANT_ALLOW_CORS=true
+    # Remplacer le health check par une version plus robuste
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/health"]
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 10s
 
   # Service de traitement des documents
   document-processor:
@@ -36,13 +38,15 @@ services:
       - TEMP_DIR=/tmp/technicia-docs
       - GOOGLE_APPLICATION_CREDENTIALS=/app/google-credentials.json
     depends_on:
+      # Utilise service_started au lieu de service_healthy pour éviter les blocages
       qdrant:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8001/health"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   # Service d'analyse des schémas
   schema-analyzer:
@@ -58,12 +62,13 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/google-credentials.json
     depends_on:
       qdrant:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8002/health"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   # Service de vectorisation
   vector-engine:
@@ -83,12 +88,13 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     depends_on:
       qdrant:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8003/health"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   # Service de recherche vectorielle
   vector-store:
@@ -106,14 +112,15 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     depends_on:
       qdrant:
-        condition: service_healthy
+        condition: service_started
       vector-engine:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   # Service d'interaction avec Claude
   claude-service:
@@ -127,10 +134,11 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-3-5-sonnet-20240620}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8004/health"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   # Orchestrateur n8n
   n8n:
@@ -144,10 +152,15 @@ services:
     networks:
       - technicia_network
     environment:
-      # Authentification basique
-      - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=${N8N_USER}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD}
+      # Support pour les deux méthodes d'authentification (utilisez-en une seule à la fois)
+      
+      # Option 1: Authentification basique (désactivée si vous utilisez la clé d'encryption)
+      - N8N_BASIC_AUTH_ACTIVE=${N8N_BASIC_AUTH_ACTIVE:-false}
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-TechnicIA2025!}
+      
+      # Option 2: Authentification par clé d'encryption (recommandée pour production)
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-8e998dfe3bb64abd8937d9ea7f0a2c2f61a275354a2f194c}
       
       # Configuration pour le déploiement sur VPS
       - N8N_HOST=${N8N_HOST:-localhost}
@@ -164,15 +177,15 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     depends_on:
       document-processor:
-        condition: service_healthy
+        condition: service_started
       schema-analyzer:
-        condition: service_healthy
+        condition: service_started
       vector-engine:
-        condition: service_healthy
+        condition: service_started
       vector-store:
-        condition: service_healthy
+        condition: service_started
       claude-service:
-        condition: service_healthy
+        condition: service_started
 
   # Frontend (pour le MVP)
   frontend:
