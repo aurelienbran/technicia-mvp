@@ -1,500 +1,367 @@
 {
-  "name": "TechnicIA - Ingestion (Fixed)",
+  "name": "Ingestion TechnicIA (FIXED)",
   "nodes": [
     {
       "parameters": {
+        "httpMethod": "POST",
         "path": "upload",
-        "responseMode": "lastNode",
         "options": {
-          "binaryData": true,
-          "bodyContentType": "multipart/form-data"
-        },
-        "httpMethod": "POST"
+          "responseBinaryPropertyName": "file"
+        }
       },
-      "name": "Document Upload Webhook",
+      "id": "f9bda9f2-b21a-4c0e-8522-a44cedf45f55",
+      "name": "Webhook PDF",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [240, 300],
-      "webhookId": "technicia-upload"
+      "position": [
+        540,
+        240
+      ],
+      "webhookId": "95faf52a-4ffe-4b14-95df-a5f2430caa1c"
     },
     {
       "parameters": {
-        "jsCode": "// Récupération des informations du fichier uploadé et validation basique\nconst documentId = 'doc-' + Date.now();\nlet errors = [];\nlet fileName = 'document.pdf';\nlet fileSize = 0;\nlet binaryProperty = null;\n\n// Vérifier si nous avons reçu un fichier\nif ($input.item && $input.item.binary) {\n  const keys = Object.keys($input.item.binary);\n  if (keys.length > 0) {\n    binaryProperty = keys[0]; // Sauvegarde de la clé binaire\n    const fileData = $input.item.binary[keys[0]];\n    if (fileData) {\n      fileName = fileData.fileName || 'document.pdf';\n      fileSize = fileData.fileSize || 0;\n      \n      // Assurons-nous que le nom de fichier a l'extension .pdf\n      if (!fileName.toLowerCase().endsWith('.pdf')) {\n        fileName += '.pdf';\n      }\n      \n      // Vérification de la taille maximale (200 Mo)\n      const MAX_SIZE = 200 * 1024 * 1024;\n      if (fileSize > MAX_SIZE) {\n        errors.push(`Le fichier est trop volumineux (${Math.round(fileSize / (1024 * 1024))} Mo). Maximum autorisé: 200 Mo`);\n      }\n    } else {\n      errors.push('Données de fichier invalides');\n    }\n  } else {\n    errors.push('Aucune donnée binaire trouvée');\n  }\n} else {\n  errors.push('Aucun fichier n\\'a été téléchargé');\n}\n\n// Informations de base pour le débogage\nconsole.log('Détails du fichier:', { \n  fileName, \n  fileSize: fileSize ? (fileSize / (1024 * 1024)).toFixed(2) + ' MB' : 'N/A' \n});\n\n// Configuration globale\nconst config = {\n  storageFolder: '/tmp/technicia-docs/',\n  documentProcessorUrl: 'http://document-processor:8001/api/process',\n  schemaAnalyzerUrl: 'http://schema-analyzer:8002/api/analyze',\n  vectorEngineUrl: 'http://vector-engine:8003/api/vectorize',\n  environment: 'production',\n  version: '1.0.0'\n};\n\n// Créer le chemin complet du fichier\nconst basePath = config.storageFolder + documentId + '/';\nconst fullPath = basePath + fileName;\n\n// Résultat validé\nreturn {\n  json: {\n    documentId,\n    fileName,\n    fileSize,\n    mimeType: 'application/pdf', // On force le type MIME à PDF\n    errors,\n    isValid: errors.length === 0,\n    timestamp: new Date().toISOString(),\n    binaryProperty,\n    basePath,\n    fullPath,\n    storageFolder: config.storageFolder,\n    documentProcessorUrl: config.documentProcessorUrl,\n    schemaAnalyzerUrl: config.schemaAnalyzerUrl,\n    vectorEngineUrl: config.vectorEngineUrl\n  },\n  // Conserver les données binaires\n  binary: $input.item.binary\n};"
+        "binaryPropertyName": "file",
+        "destinationPath": "={{ \"/tmp/technicia-docs/\" + $json.name.replace(/[^a-zA-Z0-9-_\\.]/g, \"_\") }}",
+        "fileName": "={{ $json.name.replace(/[^a-zA-Z0-9-_\\.]/g, \"_\") }}",
+        "options": {}
       },
-      "name": "Validate and Configure",
-      "type": "n8n-nodes-base.code",
+      "id": "7e1b8339-dc16-4b42-a20b-d1c7c1e5b46d",
+      "name": "Écrire le fichier",
+      "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
-      "position": [420, 300]
+      "position": [
+        760,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Prépare les données pour le document processor\nconst filePath = items[0].json.path;\nconst documentId = Math.random().toString(36).substring(2, 15);\nconst fileName = items[0].json.name || \"document.pdf\";\n\n// Récupère aussi les données binaires pour le document-processor\nconst binary = items[0].binary;\n\nreturn [\n  {\n    json: {\n      documentId,\n      filePath,\n      fileName,\n      mimeType: \"application/pdf\",\n      extractImages: true,\n      extractText: true\n    },\n    binary: binary // Conserve les données binaires\n  }\n];"
+      },
+      "id": "8ad6e3af-7cee-4a69-86a0-3a38f6e6e764",
+      "name": "Préparer traitement",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        980,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://document-processor:8001/process",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "binaryData",
+              "inputDataFieldNameSpecialChars": "={{ $binary.file }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d0e0ae7a-be9b-40e9-9c66-2ae5dab1e8c9",
+      "name": "Document Processor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Traite la réponse du document processor\nconst result = items[0].json;\n\n// Prépare les données pour le traitement des images\nconst images = result.images || [];\nconst documentId = result.documentId;\nconst fileName = result.fileName;\nconst textBlocks = result.textBlocks || [];\n\n// Retourne un item pour chaque image à traiter\nif (images.length > 0) {\n  return images.map(image => ({\n    json: {\n      documentId,\n      fileName,\n      imageId: image.id,\n      imagePath: image.path,\n      page: image.page,\n      processingStatus: \"pending\",\n      textBlocks\n    }\n  }));\n} else {\n  // S'il n'y a pas d'images, retourner un item vide pour continuer le workflow\n  return [{\n    json: {\n      documentId,\n      fileName,\n      noImages: true,\n      processingStatus: \"completed\",\n      textBlocks\n    }\n  }];\n}"
+      },
+      "id": "a923c5e9-be0e-4f16-9aad-16e4ee28ed93",
+      "name": "Extraire images",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1400,
+        240
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "boolean": [
+          "string": [
             {
-              "value1": "={{ $json.isValid }}",
-              "value2": true
+              "value1": "={{ $json.noImages }}",
+              "operation": "exists"
             }
           ]
         }
       },
-      "name": "Document Valid?",
+      "id": "67fc29ee-a14e-4d35-a903-f5eadcfaa64e",
+      "name": "Vérifier images",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [600, 300]
+      "position": [
+        1620,
+        240
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Utiliser les APIs sécurisées de n8n\nconst fs = $node.fs;\nconst path = $node.path;\n\ntry {\n  // Récupérer les infos nécessaires\n  const { fullPath, binaryProperty } = $input.item.json;\n  \n  // Créer les répertoires parents si nécessaires\n  fs.mkdirSync(path.dirname(fullPath), { recursive: true });\n  \n  // Vérifier les données binaires\n  if (!binaryProperty || !$input.item.binary || !$input.item.binary[binaryProperty]) {\n    throw new Error('Données binaires manquantes');\n  }\n  \n  // Accéder aux données binaires\n  const binaryData = $input.item.binary[binaryProperty];\n  \n  // Convertir et écrire le fichier\n  const buffer = Buffer.from(binaryData.data, 'base64');\n  fs.writeFileSync(fullPath, buffer);\n  \n  console.log(`Fichier écrit avec succès: ${fullPath}`);\n  \n  // Conserver toutes les données pour le nœud suivant\n  return $input.item;\n  \n} catch (error) {\n  console.error('Erreur lors de l\\'écriture du fichier:', error);\n  throw new Error(`Erreur d'écriture du fichier: ${error.message}`);\n}"
-      },
-      "name": "Write File",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [760, 300]
-    },
-    {
-      "parameters": {
-        "url": "={{ $json.documentProcessorUrl }}",
+        "url": "=http://schema-analyzer:8002/analyze",
         "method": "POST",
-        "bodyContentType": "json",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "documentId",
-              "value": "={{ $json.documentId }}"
-            },
-            {
-              "name": "filePath",
-              "value": "={{ $json.fullPath }}"
-            },
-            {
-              "name": "fileName",
-              "value": "={{ $json.fileName }}"
-            },
-            {
-              "name": "mimeType",
-              "value": "={{ $json.mimeType }}"
-            },
-            {
-              "name": "outputPath",
-              "value": "={{ $json.basePath }}"
-            },
-            {
-              "name": "extractImages",
-              "value": true
-            },
-            {
-              "name": "extractText",
-              "value": true
-            }
-          ]
-        },
-        "options": {
-          "allowUnauthorizedCerts": true,
-          "response": {
-            "response": {
-              "fullResponse": true
-            }
-          }
-        }
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"documentId\": \"{{ $json.documentId }}\",\n  \"imageId\": \"{{ $json.imageId }}\",\n  \"imagePath\": \"{{ $json.imagePath }}\"\n}",
+        "options": {}
       },
-      "name": "Document Processor Service",
+      "id": "2a44f2a3-2037-4dc2-a60d-c44f3fe25ee3",
+      "name": "Analyser schéma",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 2,
-      "position": [920, 300]
+      "position": [
+        1820,
+        160
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Traiter les résultats du Document Processor\nconst docProcessorResults = $json.body || {};\n\n// Vérifier si le service a bien fonctionné\nif (!docProcessorResults.success) {\n  throw new Error(`Document Processor failed: ${docProcessorResults.message || 'Unknown error'}`);\n}\n\n// Récupérer les données du document\nconst documentInfo = $input.item.json;\nconst documentId = documentInfo.documentId;\nconst extractedImages = docProcessorResults.images || [];\nconst basePath = documentInfo.basePath;\n\n// Préparer les données pour Schema Analyzer\nreturn {\n  json: {\n    documentId,\n    basePath,\n    schemaAnalyzerUrl: documentInfo.schemaAnalyzerUrl,\n    vectorEngineUrl: documentInfo.vectorEngineUrl,\n    images: extractedImages.map(img => ({\n      id: img.id,\n      path: img.path,\n      page: img.page,\n      width: img.width,\n      height: img.height\n    })),\n    textBlocks: docProcessorResults.textBlocks || [],\n    pageCount: docProcessorResults.pageCount || 0,\n    metadata: docProcessorResults.metadata || {},\n    fileName: documentInfo.fileName,\n    timestamp: new Date().toISOString()\n  }\n};"
-      },
-      "name": "Process Document Results",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [1080, 300]
-    },
-    {
-      "parameters": {
-        "url": "={{ $json.schemaAnalyzerUrl }}",
+        "url": "=http://vector-engine:8003/vectorize/document",
         "method": "POST",
-        "bodyContentType": "json",
-        "bodyParametersJson": "={{ { \"documentId\": $json.documentId, \"images\": $json.images, \"basePath\": $json.basePath } }}",
-        "options": {
-          "allowUnauthorizedCerts": true,
-          "response": {
-            "response": {
-              "fullResponse": true
-            }
-          }
-        }
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"documentId\": \"{{ $('Préparer traitement').item.json.documentId }}\",\n  \"fileName\": \"{{ $('Préparer traitement').item.json.fileName }}\",\n  \"filePath\": \"{{ $('Préparer traitement').item.json.filePath }}\",\n  \"textBlocks\": {{ JSON.stringify($json.textBlocks || []) }}\n}",
+        "options": {}
       },
-      "name": "Schema Analyzer Service",
+      "id": "85b2d293-9334-400d-a600-3f1d9ca3aa3d",
+      "name": "Vectoriser document",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 2,
-      "position": [1240, 300]
+      "position": [
+        2100,
+        360
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Traiter les résultats du Schema Analyzer\nconst analyzerResults = $json.body || {};\n\n// Vérifier si le service a bien fonctionné\nif (!analyzerResults.success) {\n  throw new Error(`Schema Analyzer failed: ${analyzerResults.message || 'Unknown error'}`);\n}\n\n// Récupérer les données du document\nconst documentInfo = $input.item.json;\nconst documentId = documentInfo.documentId;\nconst textBlocks = documentInfo.textBlocks;\nconst pageCount = documentInfo.pageCount;\nconst metadata = documentInfo.metadata;\nconst processedImages = analyzerResults.images || [];\n\n// Calculer des statistiques sur les images\nconst stats = {\n  totalImages: processedImages.length,\n  technicalDiagrams: processedImages.filter(img => img.classification === 'technical_diagram').length,\n  decorativeImages: processedImages.filter(img => img.classification !== 'technical_diagram').length,\n  imagesWithText: processedImages.filter(img => img.ocrText && img.ocrText.length > 0).length\n};\n\n// Préparer les données pour Vector Engine\nreturn {\n  json: {\n    documentId,\n    vectorEngineUrl: documentInfo.vectorEngineUrl,\n    textBlocks,\n    images: processedImages,\n    metadata: {\n      ...metadata,\n      pageCount,\n      imageStats: stats\n    },\n    fileName: documentInfo.fileName,\n    timestamp: new Date().toISOString()\n  }\n};"
+        "content": "## Workflow d'ingestion TechnicIA (FIXED)\nCe workflow permet l'ingestion des documents techniques dans TechnicIA:\n1. Réception du document via webhook (\"file\" comme champ binaire)\n2. Écriture du fichier sur le système (utilisant \"file\" comme propriété binaire) \n3. Traitement par Document Processor pour extraire texte et images\n4. Analyse des schémas avec Schema Analyzer pour classification\n5. Vectorisation du contenu avec Vector Engine pour indexation\n6. Notification de complétion",
+        "height": 256.80801162354124,
+        "width": 457.8548927287922
       },
-      "name": "Process Schema Results",
-      "type": "n8n-nodes-base.code",
+      "id": "2d9bdb6b-1f8a-4a78-b0a4-d3eab74bfc30",
+      "name": "Documentation",
+      "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1400, 300]
+      "position": [
+        320,
+        100
+      ]
     },
     {
       "parameters": {
-        "url": "={{ $json.vectorEngineUrl }}/process",
+        "url": "=http://vector-engine:8003/vectorize/image",
         "method": "POST",
-        "bodyContentType": "json",
-        "bodyParametersJson": "={{ { \"documentId\": $json.documentId, \"textBlocks\": $json.textBlocks, \"images\": $json.images.filter(img => img.classification === 'technical_diagram'), \"metadata\": $json.metadata } }}",
-        "options": {
-          "allowUnauthorizedCerts": true,
-          "response": {
-            "response": {
-              "fullResponse": true
-            }
-          }
-        }
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"documentId\": \"{{ $json.documentId }}\",\n  \"imageId\": \"{{ $json.imageId }}\",\n  \"imagePath\": \"{{ $json.imagePath }}\",\n  \"classification\": {{ JSON.stringify($json.classification || {}) }}\n}",
+        "options": {}
       },
-      "name": "Vector Engine Service",
+      "id": "77cc80e6-5f30-4d89-a651-03ec72da93bc",
+      "name": "Vectoriser image",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 2,
-      "position": [1560, 300]
+      "position": [
+        2100,
+        160
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Préparer la réponse finale\nconst vectorEngineResults = $json.body || {};\n\n// Vérifier si le service a bien fonctionné\nif (!vectorEngineResults.success) {\n  throw new Error(`Vector Engine failed: ${vectorEngineResults.message || 'Unknown error'}`);\n}\n\n// Récupérer les informations\nconst documentInfo = $input.item.json;\nconst documentId = documentInfo.documentId;\nconst fileName = documentInfo.fileName;\nconst metadata = documentInfo.metadata || {};\nconst imageStats = metadata.imageStats || {};\nconst vectorStats = vectorEngineResults.stats || {};\n\n// Créer la réponse finale\nreturn {\n  json: {\n    success: true,\n    documentId,\n    fileName,\n    processingCompleted: true,\n    timestamp: new Date().toISOString(),\n    stats: {\n      textBlocksCount: vectorStats.totalTextBlocks || documentInfo.textBlocks?.length || 0,\n      chunksCreated: vectorStats.chunksCount || 0,\n      vectorsIndexed: vectorStats.indexedCount || 0,\n      imagesCount: imageStats.totalImages || documentInfo.images?.length || 0,\n      technicalDiagramsCount: imageStats.technicalDiagrams || 0,\n      pageCount: metadata.pageCount || 0\n    },\n    microservicesUsed: {\n      documentProcessor: true,\n      schemaAnalyzer: true,\n      vectorEngine: true\n    },\n    status: 'indexed',\n    retrievalReady: true,\n    searchUrl: vectorEngineResults.searchEndpoint || null\n  }\n};"
+        "batchSize": 1,
+        "options": {}
       },
-      "name": "Prepare Final Response",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [1720, 300]
-    },
-    {
-      "parameters": {
-        "url": "http://frontend:3000/api/notifications",
-        "method": "POST",
-        "bodyContentType": "json",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "type",
-              "value": "document_processed"
-            },
-            {
-              "name": "documentId",
-              "value": "={{ $json.documentId }}"
-            },
-            {
-              "name": "fileName",
-              "value": "={{ $json.fileName }}"
-            },
-            {
-              "name": "stats",
-              "value": "={{ $json.stats }}"
-            },
-            {
-              "name": "status",
-              "value": "={{ $json.status }}"
-            }
-          ]
-        },
-        "options": {
-          "allowUnauthorizedCerts": true
-        }
-      },
-      "name": "Notify Frontend",
-      "type": "n8n-nodes-base.httpRequest",
+      "id": "79b3d608-d44a-4c25-bd7f-9a7aafaf6b53",
+      "name": "Merge images",
+      "type": "n8n-nodes-base.merge",
       "typeVersion": 2,
-      "position": [1880, 300]
+      "position": [
+        2340,
+        220
+      ]
     },
     {
       "parameters": {
-        "content": "={{ JSON.stringify({success: true, document_id: $json.documentId, status: 'processing', message: 'Document accepté et en cours de traitement'}) }}",
-        "responseProperties": {
-          "properties": [
-            {
-              "name": "responseCode",
-              "value": 200
-            }
-          ]
-        }
+        "functionCode": "// Fonction pour agréger les résultats et préparer la réponse finale\nconst results = items.map(item => item.json);\nconst documentId = results[0]?.documentId || \"unknown\";\nconst fileName = results[0]?.fileName || \"unknown\";\n\nreturn [{\n  json: {\n    documentId,\n    fileName,\n    status: \"success\",\n    totalImages: results.filter(r => r.imageId).length,\n    processingTime: new Date().toISOString(),\n    message: `Document ${fileName} traité et indexé avec succès`\n  }\n}];"
       },
-      "name": "Send Response Success",
+      "id": "a8c7a9c9-20ee-4e65-b991-fa2d7ce2aee5",
+      "name": "Préparer réponse",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2340,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "content": "=## Document traité avec succès\n\n**Détails du document:**\n- **Nom:** {{ $json.fileName }}\n- **ID:** {{ $json.documentId }}\n- **Images traitées:** {{ $json.totalImages || 0 }}\n- **Statut:** {{ $json.status || 'Terminé' }}\n\nLe document a été indexé avec succès dans la base de connaissances TechnicIA. Vous pouvez maintenant poser des questions sur son contenu.",
+        "options": {}
+      },
+      "id": "0f2a7d3b-7c2c-4cc8-add7-9c4bfd2c5baa",
+      "name": "Notification de succès",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [760, 160]
-    },
-    {
-      "parameters": {
-        "content": "={{ JSON.stringify({ success: false, errors: $json.errors }) }}",
-        "responseProperties": {
-          "properties": [
-            {
-              "name": "responseCode",
-              "value": 400
-            }
-          ]
-        }
-      },
-      "name": "Send Response Error",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [760, 520]
-    },
-    {
-      "parameters": {
-        "path": "health",
-        "responseMode": "onReceived",
-        "options": {},
-        "httpMethod": "GET"
-      },
-      "name": "Health Check Endpoint",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [240, 520],
-      "webhookId": "technicia-health"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Vérifier l'état des microservices\nconst microserviceUrls = {\n  documentProcessor: 'http://document-processor:8001/health',\n  schemaAnalyzer: 'http://schema-analyzer:8002/health',\n  vectorEngine: 'http://vector-engine:8003/health'\n};\n\n// Fonction pour vérifier l'état d'un microservice\nasync function checkServiceHealth(url) {\n  try {\n    const response = await $http.get(url);\n    return response.status === 200 ? 'operational' : 'degraded';\n  } catch (error) {\n    return 'unavailable';\n  }\n}\n\n// Vérification de l'état des services\nconst documentProcessorStatus = await checkServiceHealth(microserviceUrls.documentProcessor);\nconst schemaAnalyzerStatus = await checkServiceHealth(microserviceUrls.schemaAnalyzer);\nconst vectorEngineStatus = await checkServiceHealth(microserviceUrls.vectorEngine);\n\n// Déterminer l'état global\nconst allOperational = (\n  documentProcessorStatus === 'operational' &&\n  schemaAnalyzerStatus === 'operational' &&\n  vectorEngineStatus === 'operational'\n);\n\nconst anyUnavailable = (\n  documentProcessorStatus === 'unavailable' ||\n  schemaAnalyzerStatus === 'unavailable' ||\n  vectorEngineStatus === 'unavailable'\n);\n\nconst systemStatus = allOperational ? 'operational' : (anyUnavailable ? 'service_outage' : 'degraded');\n\n// Retourner l'état de santé\nreturn {\n  json: {\n    status: systemStatus,\n    service: 'TechnicIA Document Ingestion',\n    version: '2.0.0',\n    timestamp: new Date().toISOString(),\n    microservices: {\n      documentProcessor: documentProcessorStatus,\n      schemaAnalyzer: schemaAnalyzerStatus,\n      vectorEngine: vectorEngineStatus\n    }\n  }\n};"
-      },
-      "name": "Check Microservices Health",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [420, 520]
-    },
-    {
-      "parameters": {
-        "content": "={{ JSON.stringify($json) }}",
-        "responseProperties": {
-          "properties": [
-            {
-              "name": "responseCode",
-              "value": "={{ $json.status === 'operational' ? 200 : ($json.status === 'degraded' ? 503 : 500) }}"
-            }
-          ]
-        }
-      },
-      "name": "Return Health Status",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [600, 520]
-    },
-    {
-      "parameters": {
-        "path": "document/:documentId/status",
-        "responseMode": "onReceived",
-        "options": {},
-        "httpMethod": "GET"
-      },
-      "name": "Document Status Endpoint",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [240, 700],
-      "webhookId": "technicia-document-status"
-    },
-    {
-      "parameters": {
-        "url": "={{ 'http://vector-engine:8003/api/document/' + $parameter.documentId + '/status' }}",
-        "method": "GET",
-        "options": {
-          "allowUnauthorizedCerts": true,
-          "response": {
-            "response": {
-              "fullResponse": true
-            }
-          }
-        }
-      },
-      "name": "Get Document Status",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 2,
-      "position": [420, 700]
-    },
-    {
-      "parameters": {
-        "content": "={{ JSON.stringify($json.body || {error: 'Unable to retrieve document status'}) }}",
-        "responseProperties": {
-          "properties": [
-            {
-              "name": "responseCode",
-              "value": "={{ $json.statusCode || 200 }}"
-            }
-          ]
-        }
-      },
-      "name": "Return Document Status",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [600, 700]
+      "position": [
+        2580,
+        220
+      ]
     }
   ],
   "connections": {
-    "Document Upload Webhook": {
+    "Webhook PDF": {
       "main": [
         [
           {
-            "node": "Validate and Configure",
+            "node": "Écrire le fichier",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Validate and Configure": {
+    "Écrire le fichier": {
       "main": [
         [
           {
-            "node": "Document Valid?",
+            "node": "Préparer traitement",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Document Valid?": {
+    "Préparer traitement": {
       "main": [
         [
           {
-            "node": "Write File",
+            "node": "Document Processor",
             "type": "main",
             "index": 0
-          },
+          }
+        ]
+      ]
+    },
+    "Document Processor": {
+      "main": [
+        [
           {
-            "node": "Send Response Success",
+            "node": "Extraire images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire images": {
+      "main": [
+        [
+          {
+            "node": "Vérifier images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vérifier images": {
+      "main": [
+        [
+          {
+            "node": "Analyser schéma",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Send Response Error",
+            "node": "Vectoriser document",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Write File": {
+    "Analyser schéma": {
       "main": [
         [
           {
-            "node": "Document Processor Service",
+            "node": "Vectoriser image",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Document Processor Service": {
+    "Vectoriser image": {
       "main": [
         [
           {
-            "node": "Process Document Results",
+            "node": "Merge images",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Process Document Results": {
+    "Vectoriser document": {
       "main": [
         [
           {
-            "node": "Schema Analyzer Service",
+            "node": "Préparer réponse",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Schema Analyzer Service": {
+    "Merge images": {
       "main": [
         [
           {
-            "node": "Process Schema Results",
+            "node": "Préparer réponse",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Process Schema Results": {
+    "Préparer réponse": {
       "main": [
         [
           {
-            "node": "Vector Engine Service",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Vector Engine Service": {
-      "main": [
-        [
-          {
-            "node": "Prepare Final Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare Final Response": {
-      "main": [
-        [
-          {
-            "node": "Notify Frontend",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Health Check Endpoint": {
-      "main": [
-        [
-          {
-            "node": "Check Microservices Health",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Check Microservices Health": {
-      "main": [
-        [
-          {
-            "node": "Return Health Status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Document Status Endpoint": {
-      "main": [
-        [
-          {
-            "node": "Get Document Status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Document Status": {
-      "main": [
-        [
-          {
-            "node": "Return Document Status",
+            "node": "Notification de succès",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
-  }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "id": "1",
+      "name": "TechnicIA",
+      "color": "#50e3c2"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2025-04-01T00:00:00.000Z",
+  "versionId": "9d3a71ab-6db5-4b2d-925a-4ac92a8c35e7"
 }
