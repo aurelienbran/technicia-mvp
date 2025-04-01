@@ -9,6 +9,7 @@
 #   --status          Affiche le statut des services
 #   --stop            Arrête tous les services
 #   --import FILE.pdf Importe un fichier PDF pour test
+#   --setup-optimized Configure n8n avec les workflows optimisés
 #   -h, --help        Affiche cette aide
 
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
@@ -16,6 +17,10 @@ PROJECT_DIR=$(dirname "$SCRIPT_DIR")
 COMPOSE_FILE="$PROJECT_DIR/docker-compose.yml"
 ENV_FILE="$PROJECT_DIR/.env"
 ENV_EXAMPLE="$PROJECT_DIR/.env.example"
+WORKFLOWS_DIR="$PROJECT_DIR/workflows"
+OPTIMIZED_INGESTION="$WORKFLOWS_DIR/technicia-ingestion-optimized.json"
+OPTIMIZED_QUESTION="$WORKFLOWS_DIR/question-optimized.json"
+OPTIMIZED_DIAGNOSTIC="$WORKFLOWS_DIR/diagnostic-optimized.json"
 
 # Vérification des prérequis
 check_prerequisites() {
@@ -77,7 +82,7 @@ start_services() {
     echo "   - Qdrant: http://localhost:6333/dashboard"
     echo "   - Frontend: http://localhost:3000"
     echo ""
-    echo "🔍 Pour importer un workflow n8n, accédez à http://localhost:5678 et importez le fichier depuis workflows/technicia-ingestion-pure-microservices-fixed.json"
+    echo "🔍 Pour importer un workflow n8n, accédez à http://localhost:5678 et importez les workflows depuis le répertoire /workflows"
 }
 
 # Afficher les logs
@@ -140,6 +145,39 @@ import_pdf() {
     echo "ℹ️  Suivez l'avancement dans les logs du service document-processor"
 }
 
+# Configure n8n avec les workflows optimisés
+setup_optimized_workflows() {
+    echo "🔧 Configuration de n8n avec les workflows optimisés..."
+    
+    # Vérifier que les services sont démarrés
+    if ! docker-compose -f "$COMPOSE_FILE" ps | grep -q "Up"; then
+        echo "❌ Les services ne sont pas démarrés. Veuillez les démarrer avant de configurer n8n."
+        exit 1
+    fi
+    
+    # Vérifier l'existence des fichiers de workflow optimisés
+    if [ ! -f "$OPTIMIZED_INGESTION" ] || [ ! -f "$OPTIMIZED_QUESTION" ] || [ ! -f "$OPTIMIZED_DIAGNOSTIC" ]; then
+        echo "❌ Les fichiers de workflow optimisés n'ont pas été trouvés."
+        echo "Veuillez vérifier que vous avez bien les fichiers suivants:"
+        echo "- $OPTIMIZED_INGESTION"
+        echo "- $OPTIMIZED_QUESTION"
+        echo "- $OPTIMIZED_DIAGNOSTIC"
+        exit 1
+    fi
+    
+    echo "📝 Pour importer les workflows optimisés, suivez ces étapes:"
+    echo ""
+    echo "1. Accédez à n8n: http://localhost:5678"
+    echo "2. Dans la section 'Workflows', cliquez sur 'Import from File'"
+    echo "3. Importez les fichiers suivants dans cet ordre:"
+    echo "   - technicia-ingestion-optimized.json"
+    echo "   - question-optimized.json"
+    echo "   - diagnostic-optimized.json"
+    echo "4. Activez chaque workflow en cliquant sur le bouton 'Active'"
+    echo ""
+    echo "ℹ️  Pour plus d'informations, consultez le guide: docs/GUIDE_WORKFLOWS_OPTIMISES.md"
+}
+
 # Afficher l'aide
 show_help() {
     echo "Usage: $0 [option]"
@@ -150,6 +188,7 @@ show_help() {
     echo "  --status          Affiche le statut des services"
     echo "  --stop            Arrête tous les services"
     echo "  --import FILE.pdf Importe un fichier PDF pour test"
+    echo "  --setup-optimized Configure n8n avec les workflows optimisés"
     echo "  -h, --help        Affiche cette aide"
 }
 
@@ -186,6 +225,9 @@ else
                 exit 1
             fi
             import_pdf "$2"
+            ;;
+        --setup-optimized)
+            setup_optimized_workflows
             ;;
         -h|--help)
             show_help
